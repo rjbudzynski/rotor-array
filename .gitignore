@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.pytest_cache/
+*.swp
+
+# Beads temporary/state files
+.beads/export-state/
+.beads/*.db-journal
+.beads/*.db-wal
+
+# Project specific
+/Users/rjb/.gemini/tmp/

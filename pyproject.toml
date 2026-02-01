@@ -1,0 +1,14 @@
+[project]
+name = "rotor-chain"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.4.1",
+    "pyqt6>=6.10.2",
+    "pyqtgraph>=0.14.0",
+    "pytest>=9.0.2",
+    "pytest-qt>=4.5.0",
+    "scipy>=1.17.0",
+]
