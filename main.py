@@ -104,6 +104,45 @@ class MainWindow(QtWidgets.QMainWindow):
             y0[:n] = theta_2d.flatten()
             # Tiny velocity perturbation to break unstable equilibrium
             y0[n] = 1e-6
+        elif preset == "Vortex Line":
+            # A vertical line of phase ramps
+            theta_2d = np.zeros((l, l))
+            mid = l // 2
+            k = self.controls.k_spin.value()
+            theta_2d[:, mid] = np.linspace(0, 2 * np.pi * k, l, endpoint=False)
+            y0[:n] = theta_2d.flatten()
+        elif preset == "Cross Domain":
+            # Four triangular domains (Upper/Lower = pi/2, Left/Right = -pi/2)
+            theta_2d = np.zeros((l, l))
+            yy, xx = np.indices((l, l))
+            # Diagonals: y=x and y=L-1-x
+            mask_upper = (yy < xx) & (yy < (l - 1 - xx))
+            mask_lower = (yy > xx) & (yy > (l - 1 - xx))
+            mask_left = (yy > xx) & (yy < (l - 1 - xx))
+            mask_right = (yy < xx) & (yy > (l - 1 - xx))
+            
+            theta_2d[mask_upper] = np.pi / 2
+            theta_2d[mask_lower] = np.pi / 2
+            theta_2d[mask_left] = -np.pi / 2
+            theta_2d[mask_right] = -np.pi / 2
+            y0[:n] = theta_2d.flatten()
+        elif preset == "Vortex Pair":
+            # Two opposite vortices
+            yy, xx = np.indices((l, l))
+            mid = (l - 1) / 2.0
+            sep = self.controls.k_spin.value() / 2.0
+            
+            # Vortex at (mid - sep, mid), Antivortex at (mid + sep, mid)
+            v1 = np.arctan2(yy - mid, xx - (mid - sep))
+            v2 = np.arctan2(yy - mid, xx - (mid + sep))
+            y0[:n] = (v1 - v2).flatten()
+        elif preset == "Skyrmion":
+            # Localized phase twist
+            yy, xx = np.indices((l, l))
+            mid = (l - 1) / 2.0
+            sigma = self.controls.k_spin.value()
+            r_sq = (xx - mid)**2 + (yy - mid)**2
+            y0[:n] = (np.pi * np.exp(-r_sq / (2 * sigma**2))).flatten()
         elif preset == "Single Kick":
             # Initial velocity kick to the first rotor (0,0)
             omega_kick = self.controls.k_spin.value()

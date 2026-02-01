@@ -142,6 +142,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_combo.addItem("Random Angles")
         self.preset_combo.addItem("Twisted")
         self.preset_combo.addItem("Domain Wall")
+        self.preset_combo.addItem("Vortex Line")
+        self.preset_combo.addItem("Cross Domain")
+        self.preset_combo.addItem("Vortex Pair")
+        self.preset_combo.addItem("Skyrmion")
         self.preset_combo.addItem("Single Kick")
         self.preset_combo.addItem("Thermalized")
         self.layout.addWidget(self.preset_label)
@@ -250,22 +254,38 @@ class ControlPanel(QtWidgets.QWidget):
         self.time_callback: Callable[[float], None] = lambda x: None
 
     def _handle_preset_ui_change(self, index: int):
-        # 1: "Twisted", 3: "Single Kick", 4: "Thermalized"
+        # 1: "Twisted", 3: "Vortex Line", 5: "Vortex Pair", 6: "Skyrmion", 7: "Single Kick", 8: "Thermalized"
         if index == 1:
             self.k_label.setText("Winding (k):")
             self.k_spin.setDecimals(0)
             self.k_spin.setSingleStep(1.0)
             self.k_widget.setVisible(True)
         elif index == 3:
+            self.k_label.setText("Wraps (k):")
+            self.k_spin.setDecimals(0)
+            self.k_spin.setSingleStep(1.0)
+            self.k_widget.setVisible(True)
+        elif index == 5:
+            self.k_label.setText("Separation:")
+            self.k_spin.setDecimals(1)
+            self.k_spin.setSingleStep(1.0)
+            self.k_spin.setValue(self.l_spin.value() // 2)
+            self.k_widget.setVisible(True)
+        elif index == 6:
+            self.k_label.setText("Radius (\u03c3):")
+            self.k_spin.setDecimals(1)
+            self.k_spin.setSingleStep(1.0)
+            self.k_spin.setValue(max(2.0, self.l_spin.value() / 5.0))
+            self.k_widget.setVisible(True)
+        elif index == 7:
             self.k_label.setText("Velocity (\u03c9):")
             self.k_spin.setDecimals(2)
             self.k_spin.setSingleStep(0.1)
             self.k_widget.setVisible(True)
-        elif index == 4:
+        elif index == 8:
             self.k_label.setText("Mean Energy (\u03b5):")
             self.k_spin.setDecimals(2)
             self.k_spin.setSingleStep(0.1)
-            # Default to something reasonable if it was 1.0 (winding) or 0.0
             if self.k_spin.value() <= 0:
                 self.k_spin.setValue(1.0)
             self.k_widget.setVisible(True)

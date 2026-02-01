@@ -55,7 +55,7 @@ def test_preset_change_updates_state(app, qtbot):
 
     # Single Kick
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(3)
+        app.controls.preset_combo.setCurrentIndex(7)
     app.controls.k_spin.setValue(5.5)
     # First rotor omega is at index 0 of omega array
     assert np.isclose(app.engine.omega[0], 5.5)
@@ -64,6 +64,6 @@ def test_preset_change_updates_state(app, qtbot):
 
     # Thermalized
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(4)
+        app.controls.preset_combo.setCurrentIndex(8)
     assert not np.allclose(app.engine.omega, 0)
     assert np.allclose(app.engine.theta, 0)
