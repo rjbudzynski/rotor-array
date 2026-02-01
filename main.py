@@ -43,6 +43,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layout.addWidget(self.visualizer, stretch=4)
         
         self.controls = ControlPanel()
+        self.controls.l_spin.setValue(self.l_side)
         self.layout.addWidget(self.controls, stretch=1)
         
         # Connect controls
@@ -144,9 +145,15 @@ class MainWindow(QtWidgets.QMainWindow):
             r_sq = (xx - mid)**2 + (yy - mid)**2
             y0[:n] = (np.pi * np.exp(-r_sq / (2 * sigma**2))).flatten()
         elif preset == "Single Kick":
-            # Initial velocity kick to the first rotor (0,0)
-            omega_kick = self.controls.k_spin.value()
-            y0[n] = omega_kick
+            # Gaussian velocity kick (Wave Packet)
+            yy, xx = np.indices((l, l))
+            mid = (l - 1) / 2.0
+            omega_peak = self.controls.k_spin.value()
+            # Fixed width for the kick "drop"
+            sigma = 2.0
+            r_sq = (xx - mid)**2 + (yy - mid)**2
+            kick = omega_peak * np.exp(-r_sq / (2 * sigma**2))
+            y0[n:] = kick.flatten()
         elif preset == "Thermalized":
             # Random velocities (Maxwell-Boltzmann like)
             # User provides mean energy epsilon.
@@ -155,6 +162,13 @@ class MainWindow(QtWidgets.QMainWindow):
             epsilon = self.controls.k_spin.value()
             sigma = np.sqrt(max(0, 2 * epsilon))
             y0[n:] = np.random.normal(0, sigma, n)
+            
+        # Add Thermal Noise Overlay (Phonons)
+        t_init = self.controls.temp_slider.value() / 100.0
+        if t_init > 0:
+            # sigma = sqrt(2 * T)
+            noise_sigma = np.sqrt(2.0 * t_init)
+            y0[n:] += np.random.normal(0, noise_sigma, n)
             
         return y0
 

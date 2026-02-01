@@ -198,6 +198,15 @@ class ControlPanel(QtWidgets.QWidget):
         self.time_slider.valueChanged.connect(self._on_time_changed)
         self.layout.addWidget(self.time_label)
         self.layout.addWidget(self.time_slider)
+
+        # Initial Temperature (Noise) slider
+        self.temp_label = QtWidgets.QLabel("Initial Temp (T): 0.00")
+        self.temp_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.temp_slider.setRange(0, 200)  # 0.0 to 2.0
+        self.temp_slider.setValue(0)
+        self.temp_slider.valueChanged.connect(self._on_temp_changed)
+        self.layout.addWidget(self.temp_label)
+        self.layout.addWidget(self.temp_slider)
         
         self.layout.addSpacing(20)
         
@@ -306,6 +315,10 @@ class ControlPanel(QtWidgets.QWidget):
         scale = value / 100.0
         self.time_label.setText(f"Time Scale: {scale:.1f}x")
         self.time_callback(scale)
+
+    def _on_temp_changed(self, value: int):
+        t = value / 100.0
+        self.temp_label.setText(f"Initial Temp (T): {t:.2f}")
 
     def update_order_plot(self, times: list[float], values: list[float]):
         """Update the order parameter plot with new data."""

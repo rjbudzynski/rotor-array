@@ -53,14 +53,18 @@ def test_preset_change_updates_state(app, qtbot):
     expected_theta = (2 * np.pi * k * i_indices) / l
     assert np.allclose(app.engine.theta, expected_theta)
 
-    # Single Kick
+    # Single Kick (now a Gaussian Wave Packet)
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
         app.controls.preset_combo.setCurrentIndex(7)
     app.controls.k_spin.setValue(5.5)
-    # First rotor omega is at index 0 of omega array
-    assert np.isclose(app.engine.omega[0], 5.5)
+    
+    # Peak is at the center
+    mid = (l - 1) / 2.0
+    yy, xx = np.indices((l, l))
+    r_sq = (xx - mid)**2 + (yy - mid)**2
+    expected_omega = 5.5 * np.exp(-r_sq / (2 * 2.0**2))
+    assert np.allclose(app.engine.omega, expected_omega.flatten())
     assert np.allclose(app.engine.theta, 0)
-    assert np.allclose(app.engine.omega[1:], 0)
 
     # Thermalized
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
