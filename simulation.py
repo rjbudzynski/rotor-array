@@ -33,25 +33,32 @@ class RotorArray:
     def get_acceleration(self, theta: np.ndarray) -> np.ndarray:
         """
         Calculate the acceleration (d_omega/dt) for given angles.
+        Optimized to use bond-based force calculation to minimize sin() calls.
         """
         l = self.params.l_side
+        j = self.params.j_coupling
+        m = self.params.m_field
         theta_2d = theta.reshape(l, l)
         
-        # Periodic neighbors
-        t_up = np.roll(theta_2d, -1, axis=0)
-        t_down = np.roll(theta_2d, 1, axis=0)
-        t_left = np.roll(theta_2d, -1, axis=1)
-        t_right = np.roll(theta_2d, 1, axis=1)
+        # 1. Horizontal bonds: F_ij = -J * (sin(theta_i,j - theta_i,j+1) - sin(theta_i,j-1 - theta_i,j))
+        # diff_h[i, j] = theta[i, j] - theta[i, j+1]
+        diff_h = theta_2d - np.roll(theta_2d, -1, axis=1)
+        sin_h = np.sin(diff_h)
+        # force_h[i, j] = sin(theta_i,j - theta_i,j+1) - sin(theta_i,j-1 - theta_i,j)
+        force_h = sin_h - np.roll(sin_h, 1, axis=1)
         
-        # Forces from 4 neighbors: -dU/d_theta
-        # For a single bond: -d/d_theta_i [ J(1 - cos(theta_i - theta_j)) ] = -J * sin(theta_i - theta_j)
-        force = -(np.sin(theta_2d - t_up) + 
-                  np.sin(theta_2d - t_down) + 
-                  np.sin(theta_2d - t_left) + 
-                  np.sin(theta_2d - t_right))
+        # 2. Vertical bonds: F_ij = -J * (sin(theta_i,j - theta_i+1,j) - sin(theta_i-1,j - theta_i,j))
+        diff_v = theta_2d - np.roll(theta_2d, -1, axis=0)
+        sin_v = np.sin(diff_v)
+        force_v = sin_v - np.roll(sin_v, 1, axis=0)
         
-        accel = self.params.j_coupling * force - self.params.m_field * np.sin(theta_2d)
-        return accel.flatten()
+        accel_2d = -j * (force_h + force_v)
+        
+        # 3. Field term (only if M != 0)
+        if m != 0:
+            accel_2d -= m * np.sin(theta_2d)
+            
+        return accel_2d.flatten()
 
     def equations_of_motion(self, t: float, y: np.ndarray) -> np.ndarray:
         """
@@ -111,11 +118,14 @@ class SimulationEngine:
         self.adaptive_substepping = True
         self.substeps = 10
         self.stability_factor = 0.006
+        # Cached acceleration for Velocity Verlet
+        self._accel = None
         
     def set_state(self, y: np.ndarray, t: float = 0.0):
         """Set the current state of the simulation."""
         self.y = y.copy()
         self.t = t
+        self._accel = None
         
     def update_params(self, j: float = None, m: float = None):
         """Update simulation parameters without resetting the state."""
@@ -124,25 +134,30 @@ class SimulationEngine:
         m = m if m is not None else self.params.m_field
         self.params = SimulationParams(l_side=l, j_coupling=j, m_field=m)
         self.array.params = self.params
+        self._accel = None
 
     def verlet_step(self, dt: float):
         """
         Perform a single Velocity Verlet step.
+        Uses cached acceleration to avoid redundant calls.
         """
         n = self.params.n_rotors
         theta = self.y[:n]
         omega = self.y[n:]
         
+        # 0. Ensure we have initial acceleration
+        if self._accel is None:
+            self._accel = self.array.get_acceleration(theta)
+        
         # 1. v(t + dt/2) = v(t) + a(t) * dt/2
-        accel_t = self.array.get_acceleration(theta)
-        omega_mid = omega + accel_t * (dt / 2.0)
+        omega_mid = omega + self._accel * (dt / 2.0)
         
         # 2. x(t + dt) = x(t) + v(t + dt/2) * dt
         theta_new = theta + omega_mid * dt
         
         # 3. v(t + dt) = v(t + dt/2) + a(t + dt) * dt/2
-        accel_new = self.array.get_acceleration(theta_new)
-        omega_new = omega_mid + accel_new * (dt / 2.0)
+        self._accel = self.array.get_acceleration(theta_new)
+        omega_new = omega_mid + self._accel * (dt / 2.0)
         
         self.y[:n] = theta_new
         self.y[n:] = omega_new

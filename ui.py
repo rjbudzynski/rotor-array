@@ -129,7 +129,7 @@ class ControlPanel(QtWidgets.QWidget):
         # Lattice side control
         self.l_label = QtWidgets.QLabel("Lattice Side (L):")
         self.l_spin = QtWidgets.QSpinBox()
-        self.l_spin.setRange(2, 60)
+        self.l_spin.setRange(2, 200)
         self.l_spin.setValue(20)
         self.layout.addWidget(self.l_label)
         self.layout.addWidget(self.l_spin)

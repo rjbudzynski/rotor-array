@@ -228,7 +228,7 @@ def main():
     if os.path.exists(icon_path):
         app.setWindowIcon(QtGui.QIcon(icon_path))
     
-    l_side = 20
+    l_side = 40
     window = MainWindow(l_side)
     window.resize(1000, 700)
     window.show()
