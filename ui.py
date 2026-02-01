@@ -2,7 +2,7 @@ import pyqtgraph as pg
 import numpy as np
 from PyQt6 import QtWidgets, QtCore, QtGui
 from typing import Callable
-from colors import theta_to_hue, hsv_to_rgb_array
+from colors import theta_to_hue, hsv_to_rgb_array, omega_to_value
 
 class HelpDialog(QtWidgets.QDialog):
     """
@@ -106,6 +106,138 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         # Visual X = mean_sin
         # Visual Y = -mean_cos
         self.slit.setData([0, mean_sin], [0, -mean_cos])
+
+class ColorBarVisualizer(QtWidgets.QWidget):
+    """
+    Shows legends for Angle -> Hue and Energy -> Brightness mappings.
+    Uses native QPainter to ensure visibility and performance.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setFixedHeight(70)
+        
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # Angle Legend
+        self.angle_label = QtWidgets.QLabel("Angle (0 \u2192 2\u03c0)")
+        self.angle_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        layout.addWidget(self.angle_label)
+        
+        self.angle_bar = self._GradientWidget(self._get_angle_colors)
+        layout.addWidget(self.angle_bar)
+
+        layout.addSpacing(2)
+
+        # Energy Legend
+        self.energy_label = QtWidgets.QLabel("Energy (Dark \u2192 Bright)")
+        self.energy_label.setStyleSheet("font-size: 10px; color: #aaa;")
+        layout.addWidget(self.energy_label)
+        
+        self.energy_bar = self._GradientWidget(self._get_energy_colors)
+        layout.addWidget(self.energy_bar)
+
+    class _GradientWidget(QtWidgets.QWidget):
+        def __init__(self, color_func):
+            super().__init__()
+            self.setFixedHeight(12)
+            self.color_func = color_func
+
+        def paintEvent(self, event):
+            painter = QtGui.QPainter(self)
+            width = self.width()
+            height = self.height()
+            
+            # Draw gradient
+            colors = self.color_func(width)
+            for x in range(width):
+                painter.setPen(colors[x])
+                painter.drawLine(x, 0, x, height)
+
+    def _get_angle_colors(self, n):
+        hues = np.linspace(0, 1, n)
+        colors = []
+        for h in hues:
+            colors.append(QtGui.QColor.fromHsvF(h, 1.0, 0.8))
+        return colors
+
+    def _get_energy_colors(self, n):
+        # Map [0, 5] energy range to colors
+        energies = np.linspace(0, 5, n)
+        vals = omega_to_value(energies)
+        colors = []
+        for v in vals:
+            # Using red as the representative color for energy ramp
+            colors.append(QtGui.QColor.fromHsvF(0, 1.0, v))
+        return colors
+
+class InfoPanel(QtWidgets.QWidget):
+    """
+    Informative panel showing monitoring data and legends.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setMinimumWidth(220)
+        main_layout = QtWidgets.QVBoxLayout(self)
+
+        # Energy monitor
+        self.energy_label = QtWidgets.QLabel("Energy per Rotor: N/A")
+        self.energy_label.setStyleSheet("font-weight: bold; font-size: 13px; color: white;")
+        main_layout.addWidget(self.energy_label)
+        
+        main_layout.addSpacing(15)
+
+        # Mean Direction Disc Visualizer
+        self.mean_dir_label = QtWidgets.QLabel("Mean Direction:")
+        self.mean_dir_label.setStyleSheet("color: white;")
+        main_layout.addWidget(self.mean_dir_label)
+        self.mean_dir_visualizer = MeanDirectionVisualizer()
+        main_layout.addWidget(self.mean_dir_visualizer)
+
+        main_layout.addSpacing(10)
+
+        # Color Bar Legend
+        self.color_bar = ColorBarVisualizer()
+        main_layout.addWidget(self.color_bar)
+
+        main_layout.addSpacing(15)
+        
+        # Order parameter plot
+        self.order_label = QtWidgets.QLabel("Order Parameter (r):")
+        self.order_label.setStyleSheet("color: white;")
+        main_layout.addWidget(self.order_label)
+        self.order_plot = pg.PlotWidget()
+        self.order_plot.setBackground('k')
+        self.order_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.order_plot.setYRange(0, 1.05)
+        self.order_plot.setXRange(0, 10, padding=0)
+        self.order_plot.setFixedHeight(150)
+        
+        # Configure axes
+        font = QtGui.QFont()
+        font.setPointSize(8)
+        self.order_plot.getAxis('bottom').setTickFont(font)
+        self.order_plot.getAxis('bottom').setTickSpacing(5, 5)
+        self.order_plot.getAxis('left').setTickFont(font)
+        self.order_plot.getAxis('left').setTickSpacing(0.5, 0.5)
+        
+        self.order_curve = self.order_plot.plot(pen=pg.mkPen('y', width=1.5))
+        main_layout.addWidget(self.order_plot)
+        
+        main_layout.addStretch()
+
+    def update_order_plot(self, times: list[float], values: list[float]):
+        """Update the order parameter plot with new data."""
+        self.order_curve.setData(times, values)
+        if times:
+            t_now = times[-1]
+            if t_now > 10:
+                self.order_plot.setXRange(t_now - 10, t_now, padding=0)
+            else:
+                self.order_plot.setXRange(0, 10, padding=0)
+        else:
+            self.order_plot.setXRange(0, 10, padding=0)
 
 class ControlPanel(QtWidgets.QWidget):
     """
@@ -246,43 +378,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.reset_button = QtWidgets.QPushButton("Reset")
         self.layout.addWidget(self.reset_button)
         
-        self.layout.addSpacing(20)
-        
-        # Energy monitor
-        self.energy_label = QtWidgets.QLabel("Energy per Rotor: N/A")
-        self.layout.addWidget(self.energy_label)
-        
-        self.layout.addSpacing(20)
-
-        # Mean Direction Disc Visualizer
-        self.mean_dir_label = QtWidgets.QLabel("Mean Direction:")
-        self.layout.addWidget(self.mean_dir_label)
-        self.mean_dir_visualizer = MeanDirectionVisualizer()
-        self.layout.addWidget(self.mean_dir_visualizer)
-
-        self.layout.addSpacing(10)
-        
-        # Order parameter plot
-        self.order_label = QtWidgets.QLabel("Order Parameter (r):")
-        self.layout.addWidget(self.order_label)
-        self.order_plot = pg.PlotWidget()
-        self.order_plot.setBackground('k')
-        self.order_plot.showGrid(x=True, y=True, alpha=0.3)
-        self.order_plot.setYRange(0, 1.05)
-        self.order_plot.setXRange(0, 10, padding=0)
-        self.order_plot.setFixedHeight(150)
-        
-        # Configure axes
-        font = QtGui.QFont()
-        font.setPointSize(8)
-        self.order_plot.getAxis('bottom').setTickFont(font)
-        self.order_plot.getAxis('bottom').setTickSpacing(5, 5)
-        self.order_plot.getAxis('left').setTickFont(font)
-        self.order_plot.getAxis('left').setTickSpacing(0.5, 0.5)
-        
-        self.order_curve = self.order_plot.plot(pen=pg.mkPen('y', width=1.5))
-        self.layout.addWidget(self.order_plot)
-        
         self.layout.addStretch()
         
         # Callbacks for external connection
@@ -360,18 +455,6 @@ class ControlPanel(QtWidgets.QWidget):
     def _on_temp_changed(self, value: int):
         t = value / 100.0
         self.temp_label.setText(f"Initial Temp (T): {t:.2f}")
-
-    def update_order_plot(self, times: list[float], values: list[float]):
-        """Update the order parameter plot with new data."""
-        self.order_curve.setData(times, values)
-        if times:
-            t_now = times[-1]
-            if t_now > 10:
-                self.order_plot.setXRange(t_now - 10, t_now, padding=0)
-            else:
-                self.order_plot.setXRange(0, 10, padding=0)
-        else:
-            self.order_plot.setXRange(0, 10, padding=0)
 
     def set_j_callback(self, callback: Callable[[float], None]):
         self.j_callback = callback

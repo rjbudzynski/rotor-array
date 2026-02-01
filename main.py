@@ -5,7 +5,7 @@ from collections import deque
 from PyQt6 import QtWidgets, QtCore, QtGui
 from simulation import SimulationEngine, SimulationParams
 from visualizer import RotorArrayVisualizer
-from ui import ControlPanel
+from ui import ControlPanel, InfoPanel
 
 class MainWindow(QtWidgets.QMainWindow):
     """
@@ -39,6 +39,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.layout = QtWidgets.QHBoxLayout(self.central_widget)
         
+        self.info_panel = InfoPanel()
+        self.layout.addWidget(self.info_panel, stretch=1)
+        
         self.visualizer = RotorArrayVisualizer(l_side)
         self.layout.addWidget(self.visualizer, stretch=4)
         
@@ -52,6 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.k_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.p2_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.p3_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
+        self.controls.temp_slider.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.set_j_callback(self.update_j)
         self.controls.set_m_callback(self.update_m)
         self.controls.set_time_callback(self.update_time_scale)
@@ -71,7 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Update mean direction visualizer
         op = self.engine.get_order_parameter()
-        self.controls.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+        self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
         
         # Ensure correct sizing after window shows
         QtCore.QTimer.singleShot(100, self.visualizer._update_disc_size)
@@ -248,14 +252,14 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Update mean direction visualizer
         op = self.engine.get_order_parameter()
-        self.controls.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+        self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
         
-        self.controls.update_order_plot([], [])
+        self.info_panel.update_order_plot([], [])
 
     def update_energy_display(self):
         energy = self.engine.get_energy()
         mean_energy = energy / self.engine.params.n_rotors
-        self.controls.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
+        self.info_panel.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
 
     def simulation_step(self):
         success = self.engine.step(self.dt * self.time_scale)
@@ -274,12 +278,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.update_energy_display()
             
             # Update mean direction visualizer
-            self.controls.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+            self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
             
             # Update order parameter plot
             times = [h[0] for h in self.order_history]
             values = [h[1] for h in self.order_history]
-            self.controls.update_order_plot(times, values)
+            self.info_panel.update_order_plot(times, values)
 
 
 def main():
