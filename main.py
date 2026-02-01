@@ -50,6 +50,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
         self.controls.preset_combo.currentIndexChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.k_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
+        self.controls.p2_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
+        self.controls.p3_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.set_j_callback(self.update_j)
         self.controls.set_m_callback(self.update_m)
         self.controls.set_time_callback(self.update_time_scale)
@@ -105,12 +107,24 @@ class MainWindow(QtWidgets.QMainWindow):
             y0[:n] = theta_2d.flatten()
             # Tiny velocity perturbation to break unstable equilibrium
             y0[n] = 1e-6
-        elif preset == "Vortex Line":
-            # A vertical line of phase ramps
+        elif preset == "Vortex Band":
+            # A vertical band of phase ramps
             theta_2d = np.zeros((l, l))
-            mid = l // 2
             k = self.controls.k_spin.value()
-            theta_2d[:, mid] = np.linspace(0, 2 * np.pi * k, l, endpoint=False)
+            w = int(self.controls.p2_spin.value())
+            delta_phi = self.controls.p3_spin.value()
+            
+            mid = l // 2
+            start = max(0, mid - w // 2)
+            end = min(l, start + w)
+            
+            # Phase ramp along y
+            ramp = np.linspace(0, 2 * np.pi * k, l, endpoint=False)
+            
+            for j in range(start, end):
+                # Apply ramp and inter-line phase shift
+                theta_2d[:, j] = ramp + (j - start) * delta_phi
+                
             y0[:n] = theta_2d.flatten()
         elif preset == "Cross Domain":
             # Four triangular domains (Upper/Lower = pi/2, Left/Right = -pi/2)

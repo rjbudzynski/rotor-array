@@ -142,7 +142,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_combo.addItem("Random Angles")
         self.preset_combo.addItem("Twisted")
         self.preset_combo.addItem("Domain Wall")
-        self.preset_combo.addItem("Vortex Line")
+        self.preset_combo.addItem("Vortex Band")
         self.preset_combo.addItem("Cross Domain")
         self.preset_combo.addItem("Vortex Pair")
         self.preset_combo.addItem("Skyrmion")
@@ -151,7 +151,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.layout.addWidget(self.preset_label)
         self.layout.addWidget(self.preset_combo)
         
-        # Winding number / Index / Velocity for presets
+        # Parameter 1 (k)
         self.k_widget = QtWidgets.QWidget()
         self.k_layout = QtWidgets.QHBoxLayout(self.k_widget)
         self.k_layout.setContentsMargins(0, 0, 0, 0)
@@ -164,8 +164,36 @@ class ControlPanel(QtWidgets.QWidget):
         self.k_layout.addWidget(self.k_spin)
         self.layout.addWidget(self.k_widget)
         
+        # Parameter 2 (p2)
+        self.p2_widget = QtWidgets.QWidget()
+        self.p2_layout = QtWidgets.QHBoxLayout(self.p2_widget)
+        self.p2_layout.setContentsMargins(0, 0, 0, 0)
+        self.p2_label = QtWidgets.QLabel("Width (w):")
+        self.p2_spin = QtWidgets.QDoubleSpinBox()
+        self.p2_spin.setRange(1.0, 1000.0)
+        self.p2_spin.setDecimals(0)
+        self.p2_spin.setValue(1.0)
+        self.p2_layout.addWidget(self.p2_label)
+        self.p2_layout.addWidget(self.p2_spin)
+        self.layout.addWidget(self.p2_widget)
+
+        # Parameter 3 (p3)
+        self.p3_widget = QtWidgets.QWidget()
+        self.p3_layout = QtWidgets.QHBoxLayout(self.p3_widget)
+        self.p3_layout.setContentsMargins(0, 0, 0, 0)
+        self.p3_label = QtWidgets.QLabel("Shift (\u03b4\u03c6):")
+        self.p3_spin = QtWidgets.QDoubleSpinBox()
+        self.p3_spin.setRange(-np.pi, np.pi)
+        self.p3_spin.setDecimals(2)
+        self.p3_spin.setValue(0.0)
+        self.p3_layout.addWidget(self.p3_label)
+        self.p3_layout.addWidget(self.p3_spin)
+        self.layout.addWidget(self.p3_widget)
+        
         # Initialize visibility
         self.k_widget.setVisible(False)
+        self.p2_widget.setVisible(False)
+        self.p3_widget.setVisible(False)
         
         # Connect internal visibility toggle
         self.preset_combo.currentIndexChanged.connect(self._handle_preset_ui_change)
@@ -263,7 +291,12 @@ class ControlPanel(QtWidgets.QWidget):
         self.time_callback: Callable[[float], None] = lambda x: None
 
     def _handle_preset_ui_change(self, index: int):
-        # 1: "Twisted", 3: "Vortex Line", 5: "Vortex Pair", 6: "Skyrmion", 7: "Single Kick", 8: "Thermalized"
+        # Reset visibility
+        self.k_widget.setVisible(False)
+        self.p2_widget.setVisible(False)
+        self.p3_widget.setVisible(False)
+
+        # 1: "Twisted", 3: "Vortex Band", 5: "Vortex Pair", 6: "Skyrmion", 7: "Single Kick", 8: "Thermalized"
         if index == 1:
             self.k_label.setText("Winding (k):")
             self.k_spin.setDecimals(0)
@@ -274,6 +307,16 @@ class ControlPanel(QtWidgets.QWidget):
             self.k_spin.setDecimals(0)
             self.k_spin.setSingleStep(1.0)
             self.k_widget.setVisible(True)
+            
+            self.p2_label.setText("Width (w):")
+            self.p2_spin.setDecimals(0)
+            self.p2_spin.setRange(1.0, self.l_spin.value())
+            self.p2_widget.setVisible(True)
+            
+            self.p3_label.setText("Shift (\u03b4\u03c6):")
+            self.p3_spin.setDecimals(2)
+            self.p3_spin.setSingleStep(0.1)
+            self.p3_widget.setVisible(True)
         elif index == 5:
             self.k_label.setText("Separation:")
             self.k_spin.setDecimals(1)
@@ -298,8 +341,6 @@ class ControlPanel(QtWidgets.QWidget):
             if self.k_spin.value() <= 0:
                 self.k_spin.setValue(1.0)
             self.k_widget.setVisible(True)
-        else:
-            self.k_widget.setVisible(False)
 
     def _on_j_changed(self, value: int):
         j = value / 100.0
@@ -346,3 +387,6 @@ class ControlPanel(QtWidgets.QWidget):
         self.l_spin.setEnabled(not running)
         self.preset_combo.setEnabled(not running)
         self.k_spin.setEnabled(not running)
+        self.p2_spin.setEnabled(not running)
+        self.p3_spin.setEnabled(not running)
+        self.temp_slider.setEnabled(not running)
