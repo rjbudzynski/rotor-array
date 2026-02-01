@@ -62,24 +62,35 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.rgba_buffer[..., 3] = self.alpha_mask
         
         # Center the image
+        if not hasattr(self, 'img') or self.img is None:
+            return
+            
         tr = QtGui.QTransform()
         # Map the [0, total_size] range of the image to [-0.5, L-0.5]
         tr.translate(-0.5, -0.5)
         tr.scale(1.0 / s, 1.0 / s)
-        self.img.setTransform(tr)
+        try:
+            self.img.setTransform(tr)
+        except RuntimeError:
+            pass
         
-        if not hasattr(self, 'plot'):
+        if not hasattr(self, 'plot') or self.plot is None:
             return
 
         padding = 1.5
         x_range = [-padding, l_side - 1 + padding]
         y_range = [-padding, l_side - 1 + padding]
         
-        vb = self.plot.getViewBox()
-        vb.setAspectLocked(True, ratio=1.0)
-        vb.setRange(xRange=x_range, yRange=y_range, padding=0)
-        vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
-        vb.setMouseEnabled(False, False)
+        try:
+            vb = self.plot.getViewBox()
+            if vb is None:
+                return
+            vb.setAspectLocked(True, ratio=1.0)
+            vb.setRange(xRange=x_range, yRange=y_range, padding=0)
+            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
+            vb.setMouseEnabled(False, False)
+        except RuntimeError:
+            pass
 
     def _update_disc_size(self):
         pass

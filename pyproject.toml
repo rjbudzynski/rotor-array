@@ -9,6 +9,7 @@ dependencies = [
     "pyqt6>=6.10.2",
     "pyqtgraph>=0.14.0",
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
     "pytest-qt>=4.5.0",
     "scipy>=1.17.0",
 ]
