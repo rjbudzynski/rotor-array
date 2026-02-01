@@ -145,8 +145,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_time_scale(self, scale: float):
         self.time_scale = scale
-        # Update engine substeps to keep internal_dt constant (0.002)
-        self.engine.substeps = int(np.ceil(10 * scale))
 
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)

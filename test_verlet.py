@@ -7,6 +7,7 @@ def test_verlet_energy_conservation():
     # 4x4 array
     params = SimulationParams(l_side=4, j_coupling=2.0, m_field=0.5)
     engine = SimulationEngine(params)
+    engine.adaptive_substepping = False
     engine.substeps = 20
     
     # Random initial state
@@ -30,6 +31,7 @@ def test_verlet_field_energy_conservation():
     """Verify energy conservation with non-zero field M in 2D."""
     params = SimulationParams(l_side=3, j_coupling=1.0, m_field=1.0)
     engine = SimulationEngine(params)
+    engine.adaptive_substepping = False
     engine.substeps = 50
     
     n = params.n_rotors

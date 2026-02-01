@@ -107,8 +107,10 @@ class SimulationEngine:
         self.array = RotorArray(params)
         self.y = np.zeros(2 * params.n_rotors)
         self.t = 0.0
-        # Sub-stepping parameters
+        # Adaptive sub-stepping parameters
+        self.adaptive_substepping = True
         self.substeps = 10
+        self.stability_factor = 0.006
         
     def set_state(self, y: np.ndarray, t: float = 0.0):
         """Set the current state of the simulation."""
@@ -147,7 +149,20 @@ class SimulationEngine:
         self.t += dt
 
     def step(self, dt: float) -> bool:
-        """Advance the simulation by dt using sub-stepping with Verlet."""
+        """
+        Advance the simulation by dt using sub-stepping with Verlet.
+        If adaptive_substepping is True, calculates substeps to maintain stability.
+        """
+        if self.adaptive_substepping:
+            # Highest frequency mode approx sqrt(8J + M) for 2D square lattice
+            j = self.params.j_coupling
+            m = self.params.m_field
+            omega_max = np.sqrt(8.0 * abs(j) + abs(m) + 1e-9)
+            
+            # Stability limit for Velocity Verlet is omega_max * sub_dt < 2.
+            # We use a much smaller value for energy conservation.
+            self.substeps = max(1, int(np.ceil(dt * omega_max / self.stability_factor)))
+        
         sub_dt = dt / self.substeps
         for _ in range(self.substeps):
             self.verlet_step(sub_dt)

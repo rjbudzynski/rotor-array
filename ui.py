@@ -2,6 +2,7 @@ import pyqtgraph as pg
 import numpy as np
 from PyQt6 import QtWidgets, QtCore, QtGui
 from typing import Callable
+from colors import theta_to_hue, hsv_to_rgb_array
 
 class HelpDialog(QtWidgets.QDialog):
     """
@@ -66,17 +67,20 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         # Visual angle coord_theta = math_theta - pi/2
         # => math_theta = coord_theta + pi/2
         # Hue = (math_theta % 2pi) / 2pi
-        hues = ((coord_theta + np.pi / 2) % (2 * np.pi)) / (2 * np.pi)
+        math_theta = coord_theta + np.pi / 2
+        hues = theta_to_hue(math_theta)
         
         # Vectorized color generation
-        # QColor.fromHsvF is not vectorized, so we'll use a simple HSV->RGB or just loop
-        # Since it's only on init/resize, a loop is okay, but let's be cleaner.
-        for i in range(size):
-            for j in range(size):
-                if mask[i, j]:
-                    # Using V=0.8 to match RotorArrayVisualizer's val_max
-                    c = QtGui.QColor.fromHsvF(hues[i, j], 1.0, 0.8)
-                    img_data[i, j] = [c.red(), c.green(), c.blue(), 255]
+        # Using V=0.8 to match RotorArrayVisualizer's val_max
+        saturations = np.ones_like(hues)
+        values = np.full_like(hues, 0.8)
+        
+        rgb_data = hsv_to_rgb_array(hues, saturations, values)
+        
+        # Add alpha channel
+        img_data = np.zeros((size, size, 4), dtype=np.uint8)
+        img_data[..., :3] = rgb_data
+        img_data[..., 3] = mask.astype(np.uint8) * 255
         
         self.img = pg.ImageItem(img_data)
         # Center the image and scale to [-1, 1] range

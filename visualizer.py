@@ -1,6 +1,7 @@
 import numpy as np
 import pyqtgraph as pg
 from PyQt6 import QtCore, QtGui
+from colors import theta_to_hue, omega_to_value, hsv_to_rgb_array
 
 class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     """
@@ -24,9 +25,9 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.plot.setMenuEnabled(False)
         self.plot.setMouseEnabled(x=False, y=False)
         
-        # Discs representing rotors
-        self.discs = pg.ScatterPlotItem(pen=None, symbol='o', pxMode=True)
-        self.plot.addItem(self.discs)
+        # Image representing the rotor lattice
+        self.img = pg.ImageItem()
+        self.plot.addItem(self.img)
         
         self.set_l_side(l_side)
 
@@ -35,14 +36,12 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.l_side = l_side
         self.n_rotors = l_side**2
         
-        # Grid positions
-        x = np.arange(l_side)
-        y = np.arange(l_side)
-        grid_x, grid_y = np.meshgrid(x, y)
-        self.pos = np.column_stack([grid_x.flatten(), grid_y.flatten()])
-        
-        if hasattr(self, 'discs'):
-            self.discs.setData(pos=self.pos)
+        # Center pixels at integer coordinates
+        # Pixel (0, 0) covers [0, 1]x[0, 1] in local coords.
+        # We want it centered at (0, 0), so translate by -0.5, -0.5
+        tr = QtGui.QTransform()
+        tr.translate(-0.5, -0.5)
+        self.img.setTransform(tr)
         
         if not hasattr(self, 'plot'):
             return
@@ -66,39 +65,13 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         
         # Remove strict limits that might fight with aspect ratio locking
         vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
-        
-        self._update_disc_size()
 
     def _update_disc_size(self):
-        """Scale disc size to fit the widget."""
-        if not hasattr(self, 'l_side') or not hasattr(self, 'plot'):
-            return
-            
-        vb = self.plot.getViewBox()
-        view_rect = vb.viewRect()
-        
-        # Map a unit in plot coordinates to pixels
-        # width_px / width_coord
-        width_px = vb.width()
-        height_px = vb.height()
-        
-        if width_px > 0 and view_rect.width() > 0:
-            pixel_size_x = width_px / view_rect.width()
-            pixel_size_y = height_px / view_rect.height()
-            
-            # Use the smaller one to ensure fitting
-            pixel_size = min(pixel_size_x, pixel_size_y)
-            
-            # Each disc should occupy roughly 1 unit in coordinate space
-            # but we want a small gap, so use 0.9
-            size = max(2, pixel_size * 0.9)
-            
-            if hasattr(self, 'discs'):
-                self.discs.setSize(size)
+        """Scale disc size to fit the widget (No-op for ImageItem)."""
+        pass
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self._update_disc_size()
 
     def update_rotors(self, theta: np.ndarray, omega: np.ndarray):
         """
@@ -111,26 +84,20 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         if len(theta) != self.n_rotors:
             return
 
-        # Hue from theta: map [0, 2pi) to [0, 1]
-        # Using % (2*pi) to handle wrapping correctly
-        hues = (theta % (2 * np.pi)) / (2 * np.pi)
+        # Hue from theta
+        hues = theta_to_hue(theta)
         
         # Value (Brightness) from kinetic energy omega^2
-        # Zero energy -> small nonzero value (e.g. 0.2)
-        # High energy -> saturates at e.g. 0.8
-        v_sq = omega**2
-        val_min = 0.2
-        val_max = 0.8
-        # Use tanh to map energy to [0, 1] softly
-        energy_factor = np.tanh(v_sq / 5.0) 
-        vals = val_min + (val_max - val_min) * energy_factor
+        vals = omega_to_value(omega**2)
         
-        # Generate brushes
-        brushes = []
-        for i in range(self.n_rotors):
-            # QColor.fromHsvF(h, s, v, a)
-            # S=1.0 for full saturation
-            color = QtGui.QColor.fromHsvF(hues[i], 1.0, vals[i])
-            brushes.append(pg.mkBrush(color))
+        # Vectorized RGB computation
+        sats = np.ones_like(hues)
+        rgb = hsv_to_rgb_array(hues, sats, vals)
         
-        self.discs.setBrush(brushes)
+        # Reshape to 2D image
+        # theta is in row-major order (y then x), but ImageItem expects (x, y)
+        rgb_2d = rgb.reshape(self.l_side, self.l_side, 3).transpose(1, 0, 2)
+        
+        self.img.setImage(rgb_2d)
+
+    
