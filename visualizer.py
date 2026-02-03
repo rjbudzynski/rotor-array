@@ -149,10 +149,12 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
                 center_x = col * s + center_offset
                 center_y = row * s + center_offset
 
-                # Arrow endpoint: theta=0 points down (matches Mean Direction Visualizer)
-                # Uses (sin(theta), -cos(theta)) to match the order parameter slit orientation
-                end_x = center_x + arrow_length * np.sin(angle)
-                end_y = center_y - arrow_length * np.cos(angle)
+                # Arrow endpoint calculation
+                # Theta=0 should point down
+                # Standard math: x=cos(θ), y=sin(θ) has θ=0 pointing right
+                # We want θ=0 down, so rotate -90°: (cos(θ+90°), sin(θ+90°)) = (-sin(θ), cos(θ))
+                end_x = center_x - arrow_length * np.sin(angle)
+                end_y = center_y + arrow_length * np.cos(angle)
 
                 painter.drawLine(int(center_x), int(center_y), int(end_x), int(end_y))
 
