@@ -4,27 +4,28 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 from typing import Callable
 from colors import theta_to_hue, hsv_to_rgb_array, omega_to_value
 
+
 class HelpDialog(QtWidgets.QDialog):
     """
     A custom dialog to display help content with rich text/Markdown support.
     """
+
     def __init__(self, content: str, parent=None):
         super().__init__(parent=parent)
         self.setWindowTitle("Rotor Chain Simulation Help")
         self.resize(600, 500)
-        
+
         layout = QtWidgets.QVBoxLayout(self)
-        
+
         self.browser = QtWidgets.QTextBrowser()
         self.browser.setMarkdown(content)
         self.browser.setOpenExternalLinks(True)
         layout.addWidget(self.browser)
-        
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.StandardButton.Ok
-        )
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
+
 
 class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
     """
@@ -32,19 +33,20 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
     The disc is colored according to angle-color correspondence (HSV).
     Slit length: Order parameter r.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setFixedHeight(180)
         # Set background to None for transparency
         self.setBackground(None)
-        
+
         self.plot = self.addPlot()
         self.plot.setAspectLocked(True)
-        self.plot.showAxis('left', False)
-        self.plot.showAxis('bottom', False)
+        self.plot.showAxis("left", False)
+        self.plot.showAxis("bottom", False)
         self.plot.setMenuEnabled(False)
         self.plot.setMouseEnabled(x=False, y=False)
-        
+
         # Static Color Wheel (Disc)
         # We'll use an ImageItem to create a color wheel
         size = 256
@@ -52,36 +54,36 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         # This matches pyqtgraph's axisOrder='col-major' (x, y)
         x = np.linspace(-1, 1, size)
         y = np.linspace(-1, 1, size)
-        xx, yy = np.meshgrid(x, y, indexing='ij')
-        
+        xx, yy = np.meshgrid(x, y, indexing="ij")
+
         r = np.sqrt(xx**2 + yy**2)
         coord_theta = np.arctan2(yy, xx)
-        
+
         # Color wheel data: RGBA
         img_data = np.zeros((size, size, 4), dtype=np.uint8)
-        
+
         # Mask for the disc
         mask = r <= 1.0
-        
+
         # To make math theta=0 point down:
         # Visual angle coord_theta = math_theta - pi/2
         # => math_theta = coord_theta + pi/2
         # Hue = (math_theta % 2pi) / 2pi
         math_theta = coord_theta + np.pi / 2
         hues = theta_to_hue(math_theta)
-        
+
         # Vectorized color generation
         # Using V=0.8 to match RotorArrayVisualizer's val_max
         saturations = np.ones_like(hues)
         values = np.full_like(hues, 0.8)
-        
+
         rgb_data = hsv_to_rgb_array(hues, saturations, values)
-        
+
         # Add alpha channel
         img_data = np.zeros((size, size, 4), dtype=np.uint8)
         img_data[..., :3] = rgb_data
         img_data[..., 3] = mask.astype(np.uint8) * 255
-        
+
         self.img = pg.ImageItem(img_data)
         # Center the image and scale to [-1, 1] range
         tr = QtGui.QTransform()
@@ -89,11 +91,11 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         tr.scale(2.0 / size, 2.0 / size)
         self.img.setTransform(tr)
         self.plot.addItem(self.img)
-        
+
         # The "slit" indicating mean direction
-        self.slit = pg.PlotCurveItem(pen=pg.mkPen('k', width=4))
+        self.slit = pg.PlotCurveItem(pen=pg.mkPen("k", width=4))
         self.plot.addItem(self.slit)
-        
+
         # Fix range
         pad = 0.1
         self.plot.setXRange(-1 - pad, 1 + pad)
@@ -107,15 +109,17 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         # Visual Y = -mean_cos
         self.slit.setData([0, mean_sin], [0, -mean_cos])
 
+
 class ColorBarVisualizer(QtWidgets.QWidget):
     """
     Shows legends for Angle -> Hue and Energy -> Brightness mappings.
     Uses native QPainter to ensure visibility and performance.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setFixedHeight(70)
-        
+
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -124,7 +128,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
         self.angle_label = QtWidgets.QLabel("Angle (0 \u2192 2\u03c0)")
         self.angle_label.setStyleSheet("font-size: 10px; color: #aaa;")
         layout.addWidget(self.angle_label)
-        
+
         self.angle_bar = self._GradientWidget(self._get_angle_colors)
         layout.addWidget(self.angle_bar)
 
@@ -134,7 +138,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
         self.energy_label = QtWidgets.QLabel("Energy (Dark \u2192 Bright)")
         self.energy_label.setStyleSheet("font-size: 10px; color: #aaa;")
         layout.addWidget(self.energy_label)
-        
+
         self.energy_bar = self._GradientWidget(self._get_energy_colors)
         layout.addWidget(self.energy_bar)
 
@@ -148,7 +152,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
             painter = QtGui.QPainter(self)
             width = self.width()
             height = self.height()
-            
+
             # Draw gradient
             colors = self.color_func(width)
             for x in range(width):
@@ -172,10 +176,12 @@ class ColorBarVisualizer(QtWidgets.QWidget):
             colors.append(QtGui.QColor.fromHsvF(0, 1.0, v))
         return colors
 
+
 class InfoPanel(QtWidgets.QWidget):
     """
     Informative panel showing monitoring data and legends.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setMinimumWidth(220)
@@ -183,14 +189,13 @@ class InfoPanel(QtWidgets.QWidget):
 
         # Energy monitor
         self.energy_label = QtWidgets.QLabel("Energy per Rotor: N/A")
-        self.energy_label.setStyleSheet("font-weight: bold; font-size: 13px; color: white;")
+        self.energy_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         main_layout.addWidget(self.energy_label)
-        
+
         main_layout.addSpacing(15)
 
         # Mean Direction Disc Visualizer
         self.mean_dir_label = QtWidgets.QLabel("Mean Direction:")
-        self.mean_dir_label.setStyleSheet("color: white;")
         main_layout.addWidget(self.mean_dir_label)
         self.mean_dir_visualizer = MeanDirectionVisualizer()
         main_layout.addWidget(self.mean_dir_visualizer)
@@ -202,29 +207,28 @@ class InfoPanel(QtWidgets.QWidget):
         main_layout.addWidget(self.color_bar)
 
         main_layout.addSpacing(15)
-        
+
         # Order parameter plot
         self.order_label = QtWidgets.QLabel("Order Parameter (r):")
-        self.order_label.setStyleSheet("color: white;")
         main_layout.addWidget(self.order_label)
         self.order_plot = pg.PlotWidget()
-        self.order_plot.setBackground('k')
+        self.order_plot.setBackground("k")
         self.order_plot.showGrid(x=True, y=True, alpha=0.3)
         self.order_plot.setYRange(0, 1.05)
         self.order_plot.setXRange(0, 10, padding=0)
         self.order_plot.setFixedHeight(150)
-        
+
         # Configure axes
         font = QtGui.QFont()
         font.setPointSize(8)
-        self.order_plot.getAxis('bottom').setTickFont(font)
-        self.order_plot.getAxis('bottom').setTickSpacing(5, 5)
-        self.order_plot.getAxis('left').setTickFont(font)
-        self.order_plot.getAxis('left').setTickSpacing(0.5, 0.5)
-        
-        self.order_curve = self.order_plot.plot(pen=pg.mkPen('y', width=1.5))
+        self.order_plot.getAxis("bottom").setTickFont(font)
+        self.order_plot.getAxis("bottom").setTickSpacing(5, 5)
+        self.order_plot.getAxis("left").setTickFont(font)
+        self.order_plot.getAxis("left").setTickSpacing(0.5, 0.5)
+
+        self.order_curve = self.order_plot.plot(pen=pg.mkPen("y", width=1.5))
         main_layout.addWidget(self.order_plot)
-        
+
         main_layout.addStretch()
 
     def update_order_plot(self, times: list[float], values: list[float]):
@@ -239,16 +243,17 @@ class InfoPanel(QtWidgets.QWidget):
         else:
             self.order_plot.setXRange(0, 10, padding=0)
 
+
 class ControlPanel(QtWidgets.QWidget):
     """
     Control panel for the Rotor Array simulation.
     """
-    
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setMinimumWidth(250)
         self.layout = QtWidgets.QVBoxLayout(self)
-        
+
         # Header with Help
         header_layout = QtWidgets.QHBoxLayout()
         self.help_button = QtWidgets.QPushButton("?")
@@ -257,7 +262,7 @@ class ControlPanel(QtWidgets.QWidget):
         header_layout.addStretch()
         header_layout.addWidget(self.help_button)
         self.layout.addLayout(header_layout)
-        
+
         # Lattice side control
         self.l_label = QtWidgets.QLabel("Lattice Side (L):")
         self.l_spin = QtWidgets.QSpinBox()
@@ -265,9 +270,9 @@ class ControlPanel(QtWidgets.QWidget):
         self.l_spin.setValue(20)
         self.layout.addWidget(self.l_label)
         self.layout.addWidget(self.l_spin)
-        
+
         self.layout.addSpacing(10)
-        
+
         # Initial Conditions Preset
         self.preset_label = QtWidgets.QLabel("Initial Condition Preset:")
         self.preset_combo = QtWidgets.QComboBox()
@@ -282,7 +287,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.preset_combo.addItem("Thermalized")
         self.layout.addWidget(self.preset_label)
         self.layout.addWidget(self.preset_combo)
-        
+
         # Parameter 1 (k)
         self.k_widget = QtWidgets.QWidget()
         self.k_layout = QtWidgets.QHBoxLayout(self.k_widget)
@@ -295,7 +300,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.k_layout.addWidget(self.k_label)
         self.k_layout.addWidget(self.k_spin)
         self.layout.addWidget(self.k_widget)
-        
+
         # Parameter 2 (p2)
         self.p2_widget = QtWidgets.QWidget()
         self.p2_layout = QtWidgets.QHBoxLayout(self.p2_widget)
@@ -321,17 +326,17 @@ class ControlPanel(QtWidgets.QWidget):
         self.p3_layout.addWidget(self.p3_label)
         self.p3_layout.addWidget(self.p3_spin)
         self.layout.addWidget(self.p3_widget)
-        
+
         # Initialize visibility
         self.k_widget.setVisible(False)
         self.p2_widget.setVisible(False)
         self.p3_widget.setVisible(False)
-        
+
         # Connect internal visibility toggle
         self.preset_combo.currentIndexChanged.connect(self._handle_preset_ui_change)
-        
+
         self.layout.addSpacing(10)
-        
+
         # J coupling slider
         self.j_label = QtWidgets.QLabel("Coupling (J): 1.00")
         self.j_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -340,7 +345,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.j_slider.valueChanged.connect(self._on_j_changed)
         self.layout.addWidget(self.j_label)
         self.layout.addWidget(self.j_slider)
-        
+
         # M field slider
         self.m_label = QtWidgets.QLabel("Field (M): 0.00")
         self.m_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -349,7 +354,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.m_slider.valueChanged.connect(self._on_m_changed)
         self.layout.addWidget(self.m_label)
         self.layout.addWidget(self.m_slider)
-        
+
         # Time Scale slider
         self.time_label = QtWidgets.QLabel("Time Scale: 1.0x")
         self.time_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
@@ -367,23 +372,34 @@ class ControlPanel(QtWidgets.QWidget):
         self.temp_slider.valueChanged.connect(self._on_temp_changed)
         self.layout.addWidget(self.temp_label)
         self.layout.addWidget(self.temp_slider)
-        
+
+        # Direction Arrows toggle
+        self.arrows_checkbox = QtWidgets.QCheckBox("Show Direction Arrows")
+        self.arrows_checkbox.setToolTip(
+            "Show arrows indicating rotor angle (auto-disabled when L>60)"
+        )
+        self.layout.addWidget(self.arrows_checkbox)
+
         self.layout.addSpacing(20)
-        
+
         # Buttons
         self.start_stop_button = QtWidgets.QPushButton("Start")
         self.start_stop_button.setCheckable(True)
         self.layout.addWidget(self.start_stop_button)
-        
+
         self.reset_button = QtWidgets.QPushButton("Reset")
         self.layout.addWidget(self.reset_button)
-        
+
         self.layout.addStretch()
-        
+
         # Callbacks for external connection
         self.j_callback: Callable[[float], None] = lambda x: None
         self.m_callback: Callable[[float], None] = lambda x: None
         self.time_callback: Callable[[float], None] = lambda x: None
+        self.arrows_callback: Callable[[bool], None] = lambda x: None
+
+        # Connect arrows checkbox
+        self.arrows_checkbox.stateChanged.connect(self._on_arrows_changed)
 
     def _handle_preset_ui_change(self, index: int):
         # Reset visibility
@@ -402,12 +418,12 @@ class ControlPanel(QtWidgets.QWidget):
             self.k_spin.setDecimals(0)
             self.k_spin.setSingleStep(1.0)
             self.k_widget.setVisible(True)
-            
+
             self.p2_label.setText("Width (w):")
             self.p2_spin.setDecimals(0)
             self.p2_spin.setRange(1.0, self.l_spin.value())
             self.p2_widget.setVisible(True)
-            
+
             self.p3_label.setText("Shift (\u03b4\u03c6):")
             self.p3_spin.setDecimals(2)
             self.p3_spin.setSingleStep(0.1)
@@ -464,6 +480,26 @@ class ControlPanel(QtWidgets.QWidget):
 
     def set_time_callback(self, callback: Callable[[float], None]):
         self.time_callback = callback
+
+    def set_arrows_callback(self, callback: Callable[[bool], None]):
+        """Set callback for arrow visibility toggle.
+
+        Args:
+            callback: Function called with boolean (True=show arrows, False=hide).
+        """
+        self.arrows_callback = callback
+
+    def _on_arrows_changed(self, state: int):
+        """Handle arrow checkbox state change."""
+        self.arrows_callback(state == QtCore.Qt.CheckState.Checked.value)
+
+    def set_arrows_checked(self, checked: bool):
+        """Programmatically set the arrows checkbox state.
+
+        Args:
+            checked: True to check the box, False to uncheck.
+        """
+        self.arrows_checkbox.setChecked(checked)
 
     def set_simulation_running(self, running: bool):
         """Enable or disable controls that should not be changed during simulation."""

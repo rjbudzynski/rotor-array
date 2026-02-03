@@ -70,6 +70,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.set_j_callback(self.update_j)
         self.controls.set_m_callback(self.update_m)
         self.controls.set_time_callback(self.update_time_scale)
+        self.controls.set_arrows_callback(self.toggle_arrows)
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
         self.controls.help_button.clicked.connect(self.show_help)
@@ -215,6 +216,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.visualizer.set_l_side(l_side)
         QtCore.QTimer.singleShot(50, self.visualizer._update_disc_size)
 
+        # Auto-disable arrows when L > threshold
+        if l_side > self.visualizer.ARROW_THRESHOLD:
+            if self.controls.arrows_checkbox.isChecked():
+                self.controls.set_arrows_checked(False)
+                self.toggle_arrows(False)
+
         self.reset_simulation()
 
     def update_j(self, j: float):
@@ -227,6 +234,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_time_scale(self, scale: float):
         self.time_scale = scale
+
+    def toggle_arrows(self, show: bool):
+        """Toggle arrow overlay visibility.
+
+        Args:
+            show: True to show arrows, False to hide.
+        """
+        self.visualizer.toggle_arrows(show)
 
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)
