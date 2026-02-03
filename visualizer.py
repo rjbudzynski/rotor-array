@@ -104,10 +104,22 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         l = self.l_side
         total_size = l * s
 
-        # Create RGBA buffer for arrows (transparent background)
-        arrows_buffer = np.zeros((total_size, total_size, 4), dtype=np.uint8)
+        # Create a QImage to draw into. QImage uses row-major (y, x) order.
+        image = QtGui.QImage(
+            total_size,
+            total_size,
+            QtGui.QImage.Format.Format_RGBA8888,
+        )
+        image.fill(QtCore.Qt.GlobalColor.transparent)
 
-        # Calculate arrow endpoints
+        painter = QtGui.QPainter(image)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+
+        # White pen for arrows, 1 pixel width
+        pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 220))
+        pen.setWidth(1)
+        painter.setPen(pen)
+
         # Center of each disc in pixels
         center_offset = (s - 1) / 2.0
         # Arrow length (full radius = 0.45 * s)
@@ -116,62 +128,45 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         # Reshape theta to 2D grid (row-major)
         theta_2d = theta.reshape(l, l)
 
-        # Create QImage and QPainter
-        # Note: QImage expects (width, height) = (X, Y)
-        # Our buffer is (total_size, total_size, 4) = (X, Y, channels)
-        height, width = total_size, total_size
-
-        # Convert numpy array to QImage format
-        # We need to create a properly formatted image
-        image = QtGui.QImage(
-            arrows_buffer.data,
-            width,
-            height,
-            width * 4,  # bytes per line
-            QtGui.QImage.Format.Format_RGBA8888,
-        )
-
-        painter = QtGui.QPainter(image)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, False)
-
-        # White pen for arrows, 1 pixel width
-        pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 220))
-        pen.setWidth(1)
-        painter.setPen(pen)
-
         # Draw arrows for each rotor
         for row in range(l):
             for col in range(l):
-                idx = row * l + col
                 angle = theta_2d[row, col]
 
                 # Disc center in pixel coordinates
+                # row=0 is bottom in pyqtgraph, which maps to row=0 in our buffer
+                # because of the subsequent transpose and pyqtgraph's Y-up axis.
                 center_x = col * s + center_offset
                 center_y = row * s + center_offset
 
                 # Arrow endpoint calculation
-                # Theta=0 should point down
-                # Standard math: x=cos(θ), y=sin(θ) has θ=0 pointing right
-                # We want θ=0 down, so rotate -90°: (cos(θ+90°), sin(θ+90°)) = (-sin(θ), cos(θ))
-                end_x = center_x - arrow_length * np.sin(angle)
-                end_y = center_y + arrow_length * np.cos(angle)
+                # θ=0 → Down in pyqtgraph (smaller y_pg)
+                # θ=π/2 → Right in pyqtgraph (larger x_pg)
+                # In QImage: y increases DOWN.
+                # Since QImage(row, col) -> ImageItem(col, row),
+                # increasing row in QImage increases y in pyqtgraph.
+                # So to move DOWN in pyqtgraph, we move UP in QImage (smaller row).
+                end_x = center_x + arrow_length * np.sin(angle)
+                end_y = center_y - arrow_length * np.cos(angle)
 
-                painter.drawLine(int(center_x), int(center_y), int(end_x), int(end_y))
+                painter.drawLine(
+                    QtCore.QPointF(center_x, center_y),
+                    QtCore.QPointF(end_x, end_y)
+                )
 
         painter.end()
 
-        # Convert QImage back to numpy array
-        # QImage data is in (X, Y) format matching our buffer
+        # Convert QImage to numpy array
         ptr = image.bits()
         ptr.setsize(total_size * total_size * 4)
-        arrows_buffer = np.frombuffer(ptr, dtype=np.uint8).reshape(total_size, total_size, 4)
+        # QImage data is row-major: (Y, X, 4)
+        arrows_buffer_yx = np.frombuffer(ptr, dtype=np.uint8).reshape(total_size, total_size, 4)
 
-        # Apply alpha mask so arrows only appear inside discs
-        # arrows_buffer[..., 3] = arrows_buffer[..., 3] * (self.alpha_mask / 255)
-        # Actually, let's keep arrows visible but clipped by disc boundary
+        # Transpose to (X, Y, 4) for pyqtgraph's col-major ImageItem
+        arrows_buffer_xy = arrows_buffer_yx.transpose(1, 0, 2).copy()
 
         # Set the arrow image
-        self.arrows_img.setImage(arrows_buffer, autoLevels=False)
+        self.arrows_img.setImage(arrows_buffer_xy, autoLevels=False)
 
         # Apply same transform as disc image
         tr = QtGui.QTransform()
