@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 import numpy as np
 from collections import deque
 from PyQt6 import QtWidgets, QtCore, QtGui
@@ -7,51 +8,61 @@ from simulation import SimulationEngine, SimulationParams
 from visualizer import RotorArrayVisualizer
 from ui import ControlPanel, InfoPanel
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """
     Main window for the Rotor Array simulation application.
     """
-    
+
     def __init__(self, l_side: int):
         super().__init__()
         self.setWindowTitle("Rotor Array Simulation")
-        
+
         # Set window icon
         icon_path = os.path.join(os.path.dirname(__file__), "icon.svg")
         if os.path.exists(icon_path):
             self.setWindowIcon(QtGui.QIcon(icon_path))
-        
+
         # Simulation parameters and engine
         self.l_side = l_side
         self.j_coupling = 1.0
         self.m_field = 0.0
-        
+
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         self.engine = SimulationEngine(params)
-        
+
         # UI State
         self.dt = 0.02
         self.time_scale = 1.0
         self.order_history: deque[tuple[float, float]] = deque()
-        
+
         # UI
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QtWidgets.QHBoxLayout(self.central_widget)
-        
+
         self.info_panel = InfoPanel()
         self.layout.addWidget(self.info_panel, stretch=1)
-        
+
         self.visualizer = RotorArrayVisualizer(l_side)
         self.layout.addWidget(self.visualizer, stretch=4)
-        
+
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
         self.layout.addWidget(self.controls, stretch=1)
-        
+
         # Connect controls
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
-        self.controls.preset_combo.currentIndexChanged.connect(lambda: self.reinit_simulation(self.l_side))
+        self.controls.preset_combo.currentIndexChanged.connect(
+            lambda: self.reinit_simulation(self.l_side)
+        )
         self.controls.k_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.p2_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
         self.controls.p3_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
@@ -62,21 +73,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
         self.controls.help_button.clicked.connect(self.show_help)
-        
+
         # Timer for simulation loop
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.simulation_step)
-        
+
         # Initial draw
         self.y0 = self.get_initial_state()
         self.engine.set_state(self.y0)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
-        
+
         # Update mean direction visualizer
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
-        
+
         # Ensure correct sizing after window shows
         QtCore.QTimer.singleShot(100, self.visualizer._update_disc_size)
         # Also re-sync the range once layout is likely stable
@@ -92,9 +103,9 @@ class MainWindow(QtWidgets.QMainWindow):
         l = self.l_side
         n = l**2
         y0 = np.zeros(2 * n)
-        
+
         preset = self.controls.preset_combo.currentText()
-        
+
         if preset == "Random Angles":
             # theta_i from [-pi, pi)
             y0[:n] = np.random.uniform(-np.pi, np.pi, n)
@@ -117,18 +128,18 @@ class MainWindow(QtWidgets.QMainWindow):
             k = self.controls.k_spin.value()
             w = int(self.controls.p2_spin.value())
             delta_phi = self.controls.p3_spin.value()
-            
+
             mid = l // 2
             start = max(0, mid - w // 2)
             end = min(l, start + w)
-            
+
             # Phase ramp along y
             ramp = np.linspace(0, 2 * np.pi * k, l, endpoint=False)
-            
+
             for j in range(start, end):
                 # Apply ramp and inter-line phase shift
                 theta_2d[:, j] = ramp + (j - start) * delta_phi
-                
+
             y0[:n] = theta_2d.flatten()
         elif preset == "Cross Domain":
             # Four triangular domains (Upper/Lower = pi/2, Left/Right = -pi/2)
@@ -139,7 +150,7 @@ class MainWindow(QtWidgets.QMainWindow):
             mask_lower = (yy > xx) & (yy > (l - 1 - xx))
             mask_left = (yy > xx) & (yy < (l - 1 - xx))
             mask_right = (yy < xx) & (yy > (l - 1 - xx))
-            
+
             theta_2d[mask_upper] = np.pi / 2
             theta_2d[mask_lower] = np.pi / 2
             theta_2d[mask_left] = -np.pi / 2
@@ -150,7 +161,7 @@ class MainWindow(QtWidgets.QMainWindow):
             yy, xx = np.indices((l, l))
             mid = (l - 1) / 2.0
             sep = self.controls.k_spin.value() / 2.0
-            
+
             # Vortex at (mid - sep, mid), Antivortex at (mid + sep, mid)
             v1 = np.arctan2(yy - mid, xx - (mid - sep))
             v2 = np.arctan2(yy - mid, xx - (mid + sep))
@@ -160,7 +171,7 @@ class MainWindow(QtWidgets.QMainWindow):
             yy, xx = np.indices((l, l))
             mid = (l - 1) / 2.0
             sigma = self.controls.k_spin.value()
-            r_sq = (xx - mid)**2 + (yy - mid)**2
+            r_sq = (xx - mid) ** 2 + (yy - mid) ** 2
             y0[:n] = (np.pi * np.exp(-r_sq / (2 * sigma**2))).flatten()
         elif preset == "Single Kick":
             # Gaussian velocity kick (Wave Packet)
@@ -169,7 +180,7 @@ class MainWindow(QtWidgets.QMainWindow):
             omega_peak = self.controls.k_spin.value()
             # Fixed width for the kick "drop"
             sigma = 2.0
-            r_sq = (xx - mid)**2 + (yy - mid)**2
+            r_sq = (xx - mid) ** 2 + (yy - mid) ** 2
             kick = omega_peak * np.exp(-r_sq / (2 * sigma**2))
             y0[n:] = kick.flatten()
         elif preset == "Thermalized":
@@ -180,14 +191,14 @@ class MainWindow(QtWidgets.QMainWindow):
             epsilon = self.controls.k_spin.value()
             sigma = np.sqrt(max(0, 2 * epsilon))
             y0[n:] = np.random.normal(0, sigma, n)
-            
+
         # Add Thermal Noise Overlay (Phonons)
         t_init = self.controls.temp_slider.value() / 100.0
         if t_init > 0:
             # sigma = sqrt(2 * T)
             noise_sigma = np.sqrt(2.0 * t_init)
             y0[n:] += np.random.normal(0, noise_sigma, n)
-            
+
         return y0
 
     def reinit_simulation(self, l_side: int):
@@ -195,15 +206,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.l_side = l_side
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         self.engine = SimulationEngine(params)
-        
+
         # Reset state based on current preset
         self.y0 = self.get_initial_state()
         self.engine.set_state(self.y0)
-        
+
         # Update visualizer number of rotors
         self.visualizer.set_l_side(l_side)
         QtCore.QTimer.singleShot(50, self.visualizer._update_disc_size)
-        
+
         self.reset_simulation()
 
     def update_j(self, j: float):
@@ -230,30 +241,43 @@ class MainWindow(QtWidgets.QMainWindow):
         """Display the help dialog with content from HELP.md."""
         import os
         from ui import HelpDialog
+
         help_path = os.path.join(os.path.dirname(__file__), "HELP.md")
+        logger.debug(f"Attempting to load help from: {help_path}")
         try:
+            if not os.path.exists(help_path):
+                logger.error(f"HELP.md not found at: {help_path}")
+                QtWidgets.QMessageBox.critical(self, "Error", f"Help file not found:\n{help_path}")
+                return
             with open(help_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            
+            logger.info(f"Successfully loaded help file ({len(content)} characters)")
             dialog = HelpDialog(content, self)
             dialog.exec()
+        except PermissionError:
+            logger.error(f"Permission denied reading HELP.md at: {help_path}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Permission denied reading help file.")
+        except UnicodeDecodeError as e:
+            logger.error(f"Unicode decode error in HELP.md: {e}")
+            QtWidgets.QMessageBox.critical(self, "Error", f"Help file has invalid encoding: {e}")
         except Exception as e:
+            logger.exception(f"Unexpected error loading HELP.md: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Could not load HELP.md: {e}")
 
     def reset_simulation(self):
         # Stop simulation if it is running
         if self.controls.start_stop_button.isChecked():
             self.controls.start_stop_button.setChecked(False)
-        
+
         self.engine.set_state(self.y0)
         self.order_history.clear()
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
-        
+
         # Update mean direction visualizer
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
-        
+
         self.info_panel.update_order_plot([], [])
 
     def update_energy_display(self):
@@ -262,49 +286,75 @@ class MainWindow(QtWidgets.QMainWindow):
         self.info_panel.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
 
     def simulation_step(self):
-        success = self.engine.step(self.dt * self.time_scale)
-        
-        if success:
-            # Calculate order parameter r
-            op = self.engine.get_order_parameter()
-            self.order_history.append((self.engine.t, op.r))
-            
-            # Prune history to 10s window
-            while self.order_history and self.order_history[0][0] < self.engine.t - 10:
-                self.order_history.popleft()
-            
-            # Update visualization
-            self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
-            self.update_energy_display()
-            
-            # Update mean direction visualizer
-            self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
-            
-            # Update order parameter plot
-            times = [h[0] for h in self.order_history]
-            values = [h[1] for h in self.order_history]
-            self.info_panel.update_order_plot(times, values)
+        try:
+            success = self.engine.step(self.dt * self.time_scale)
+
+            if success:
+                # Calculate order parameter r
+                op = self.engine.get_order_parameter()
+                self.order_history.append((self.engine.t, op.r))
+
+                # Prune history to 10s window
+                while self.order_history and self.order_history[0][0] < self.engine.t - 10:
+                    self.order_history.popleft()
+
+                # Update visualization
+                self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+                self.update_energy_display()
+
+                # Update mean direction visualizer
+                self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+
+                # Update order parameter plot
+                times = [h[0] for h in self.order_history]
+                values = [h[1] for h in self.order_history]
+                self.info_panel.update_order_plot(times, values)
+        except ValueError as e:
+            # Simulation parameter error
+            logger.error(f"Simulation error: {e}")
+            self.timer.stop()
+            self.controls.start_stop_button.setChecked(False)
+            self.controls.start_stop_button.setText("Start")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Simulation Error",
+                f"Simulation stopped due to error:\n{e}\n\n"
+                "Try reducing time scale or changing parameters.",
+            )
+        except Exception as e:
+            # Unexpected error
+            logger.exception(f"Unexpected simulation error: {e}")
+            self.timer.stop()
+            self.controls.start_stop_button.setChecked(False)
+            self.controls.start_stop_button.setText("Start")
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Critical Error",
+                f"Unexpected error in simulation:\n{e}\n\n"
+                "Please check the logs and restart the application.",
+            )
 
 
 def main():
     QtCore.QCoreApplication.setApplicationName("RotorArraySimulation")
     QtCore.QCoreApplication.setOrganizationName("RotorArrayProject")
     QtCore.QCoreApplication.setApplicationVersion("1.0.0")
-    
+
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationDisplayName("Rotor Array Simulation")
-    
+
     # Set application icon
     icon_path = os.path.join(os.path.dirname(__file__), "icon.svg")
     if os.path.exists(icon_path):
         app.setWindowIcon(QtGui.QIcon(icon_path))
-    
+
     l_side = 40
     window = MainWindow(l_side)
     window.resize(1000, 700)
     window.show()
-    
+
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

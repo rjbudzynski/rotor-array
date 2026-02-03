@@ -1,7 +1,7 @@
 [project]
 name = "rotor-chain"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "Interactive Hamiltonian simulation of a square array of coupled planar rotors"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -13,3 +13,44 @@ dependencies = [
     "pytest-qt>=4.5.0",
     "scipy>=1.17.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "mypy>=1.14.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+select = [
+    "E",  # pycodestyle errors
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "W",  # pycodestyle warnings
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+ignore_missing_imports = true
