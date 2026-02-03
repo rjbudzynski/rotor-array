@@ -12,14 +12,39 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     'disc' rendering with anti-aliasing.
     """
 
-    UPSAMPLE = 16  # Higher resolution for smoother discs
     ARROW_THRESHOLD = 60  # Auto-disable arrows when L > this value
+    MIN_UPSAMPLE = 16  # Minimum pixels per disc (for large L)
+    MAX_UPSAMPLE = 64  # Maximum pixels per disc (for small L)
+
+    @staticmethod
+    def _calculate_upsample(l_side: int) -> int:
+        """Calculate adaptive upsample rate based on lattice size.
+
+        Formula: max(16, min(64, int(640 / L)))
+        - L=10: 64 pixels/disc (crisp large discs)
+        - L=20: 32 pixels/disc
+        - L=40: 16 pixels/disc (current standard)
+        - L>=64: 16 pixels/disc (minimum floor)
+
+        Args:
+            l_side: Lattice side length (number of rotors per side).
+
+        Returns:
+            Upsample rate: pixels per disc in each dimension.
+        """
+        if l_side <= 0:
+            return RotorArrayVisualizer.MIN_UPSAMPLE
+        return max(
+            RotorArrayVisualizer.MIN_UPSAMPLE,
+            min(RotorArrayVisualizer.MAX_UPSAMPLE, int(640 / l_side)),
+        )
 
     def __init__(self, l_side: int, parent=None):
         self.l_side = l_side
         self.n_rotors = l_side**2
         self.show_arrows = False
         self._theta_cache = None  # Cache theta for arrow rendering
+        self._upsample = self._calculate_upsample(l_side)
         super().__init__(parent=parent)
 
         self.plot = self.addPlot()
@@ -75,7 +100,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             self.arrows_img.clear()
             return
 
-        s = self.UPSAMPLE
+        s = self._upsample
         l = self.l_side
         total_size = l * s
 
@@ -153,11 +178,21 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.arrows_img.setTransform(tr)
 
     def set_l_side(self, l_side: int):
-        """Update the lattice side length and rebuild the grid/mask."""
+        """Update the lattice side length and rebuild the grid/mask.
+
+        Also recalculates the adaptive upsample rate based on new L value.
+        """
+        # Calculate new upsample rate
+        new_upsample = self._calculate_upsample(l_side)
+
+        # Check if resolution changed (need to rebuild buffers)
+        resolution_changed = new_upsample != self._upsample
+        self._upsample = new_upsample
+
         self.l_side = l_side
         self.n_rotors = l_side**2
 
-        s = self.UPSAMPLE
+        s = self._upsample
         # Create a single anti-aliased disc mask
         # We use float distances to get smooth edges
         y, x = np.ogrid[:s, :s]
@@ -211,6 +246,11 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         except RuntimeError:
             pass
 
+        # Clear arrow cache and image when resolution changes
+        if resolution_changed:
+            self._theta_cache = None
+            self.arrows_img.clear()
+
     def _update_disc_size(self):
         pass
 
@@ -235,7 +275,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         rgb_2d = rgb.reshape(self.l_side, self.l_side, 3)
 
         # Upsample using repeat
-        s = self.UPSAMPLE
+        s = self._upsample
         rgb_up = rgb_2d.repeat(s, axis=0).repeat(s, axis=1)
 
         # Transpose to (X_up, Y_up) for ImageItem col-major
