@@ -236,6 +236,9 @@ class SimulationEngine:
         # 2. x(t + dt) = x(t) + v(t + dt/2) * dt
         theta_new = theta + omega_mid * dt
 
+        # Wrap theta to [-pi, pi) for numerical stability
+        theta_new = (theta_new + np.pi) % (2 * np.pi) - np.pi
+
         # 3. v(t + dt) = v(t + dt/2) + a(t + dt) * dt/2
         self._accel = self.array.get_acceleration(theta_new)
         omega_new = omega_mid + self._accel * (dt / 2.0)

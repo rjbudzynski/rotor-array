@@ -73,3 +73,22 @@ def test_initial_conditions_prototype():
     success = engine.step(0.5)
     assert success
     assert engine.y.shape[0] == 2 * n
+
+def test_theta_wrapping():
+    """Verify that theta values are wrapped to [-pi, pi)."""
+    l_side = 2
+    params = SimulationParams(l_side=l_side, j_coupling=1.0, m_field=0.0)
+    engine = SimulationEngine(params)
+    
+    n = params.n_rotors
+    # Set omega high enough to cross 2*pi in one step
+    # dt=0.1, omega=100 -> delta_theta = 10
+    y0 = np.zeros(2 * n)
+    y0[n:] = 100.0 
+    engine.set_state(y0)
+    
+    engine.step(0.1)
+    
+    assert np.all(engine.theta >= -np.pi)
+    assert np.all(engine.theta < np.pi)
+

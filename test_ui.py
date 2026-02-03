@@ -51,6 +51,8 @@ def test_preset_change_updates_state(app, qtbot):
     k = app.controls.k_spin.value()
     i_indices = np.arange(l).repeat(l).reshape(l, l).T.flatten()
     expected_theta = (2 * np.pi * k * i_indices) / l
+    # Wrap expected_theta to [-pi, pi)
+    expected_theta = (expected_theta + np.pi) % (2 * np.pi) - np.pi
     assert np.allclose(app.engine.theta, expected_theta)
 
     # Single Kick (now a Gaussian Wave Packet)

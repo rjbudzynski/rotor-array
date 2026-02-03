@@ -248,12 +248,6 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             self._theta_cache = None
             self.arrows_img.clear()
 
-    def _update_disc_size(self):
-        pass
-
-    def resizeEvent(self, ev):
-        super().resizeEvent(ev)
-
     def update_rotors(self, theta: np.ndarray, omega: np.ndarray):
         """
         Update the visualization with new rotor angles and velocities.
@@ -287,6 +281,3 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         if self.show_arrows:
             self._render_arrows(theta)
 
-        # Update buffer
-        self.rgba_buffer[..., :3] = rgb_final
-        self.img.setImage(self.rgba_buffer, autoLevels=False)

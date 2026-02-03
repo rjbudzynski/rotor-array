@@ -7,6 +7,7 @@ from PyQt6 import QtWidgets, QtCore, QtGui
 from simulation import SimulationEngine, SimulationParams
 from visualizer import RotorArrayVisualizer
 from ui import ControlPanel, InfoPanel
+from presets import generate_initial_state
 
 # Configure logging
 logging.basicConfig(
@@ -60,14 +61,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Connect controls
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
-        self.controls.preset_combo.currentIndexChanged.connect(
-            lambda: self.reinit_simulation(self.l_side)
-        )
-        self.controls.k_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
-        self.controls.p2_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
-        self.controls.p3_spin.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
-        self.controls.temp_slider.valueChanged.connect(lambda: self.reinit_simulation(self.l_side))
+        
+        # Connect other controls that trigger re-initialization
+        reinit_triggers = [
+            self.controls.preset_combo.currentIndexChanged,
+            self.controls.k_spin.valueChanged,
+            self.controls.p2_spin.valueChanged,
+            self.controls.p3_spin.valueChanged,
+            self.controls.temp_slider.valueChanged,
+        ]
+        for trigger in reinit_triggers:
+            trigger.connect(lambda _: self.reinit_simulation(self.l_side))
+
         self.controls.set_j_callback(self.update_j)
+
         self.controls.set_m_callback(self.update_m)
         self.controls.set_time_callback(self.update_time_scale)
         self.controls.set_arrows_callback(self.toggle_arrows)
@@ -89,118 +96,34 @@ class MainWindow(QtWidgets.QMainWindow):
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
-        # Ensure correct sizing after window shows
-        QtCore.QTimer.singleShot(100, self.visualizer._update_disc_size)
-        # Also re-sync the range once layout is likely stable
-        QtCore.QTimer.singleShot(200, lambda: self.visualizer.set_l_side(self.l_side))
+        # Initial draw
+        self.y0 = self.get_initial_state()
+        self.engine.set_state(self.y0)
+        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+        self.update_energy_display()
+
+        # Update mean direction visualizer
+        op = self.engine.get_order_parameter()
+        self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Force a resize update when window is shown
-        self.visualizer._update_disc_size()
+        # Re-sync the visualizer once layout is likely stable
+        self.visualizer.set_l_side(self.l_side)
+        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+
 
     def get_initial_state(self) -> np.ndarray:
         """Generate initial state based on the selected preset."""
-        l = self.l_side
-        n = l**2
-        y0 = np.zeros(2 * n)
+        return generate_initial_state(
+            l=self.l_side,
+            preset_name=self.controls.preset_combo.currentText(),
+            k=self.controls.k_spin.value(),
+            p2=self.controls.p2_spin.value(),
+            p3=self.controls.p3_spin.value(),
+            temp=self.controls.temp_slider.value() / 100.0,
+        )
 
-        preset = self.controls.preset_combo.currentText()
-
-        if preset == "Random Angles":
-            # theta_i from [-pi, pi)
-            y0[:n] = np.random.uniform(-np.pi, np.pi, n)
-        elif preset == "Twisted":
-            # theta_i,j = 2*pi*k*i/L (twist along x)
-            k = self.controls.k_spin.value()
-            i_indices = np.arange(l).repeat(l).reshape(l, l).T.flatten()
-            y0[:n] = (2 * np.pi * k * i_indices) / l
-        elif preset == "Domain Wall":
-            # Half at 0, half at pi (split along x)
-            theta_2d = np.zeros((l, l))
-            half = l // 2
-            theta_2d[half:, :] = np.pi
-            y0[:n] = theta_2d.flatten()
-            # Tiny velocity perturbation to break unstable equilibrium
-            y0[n] = 1e-6
-        elif preset == "Vortex Band":
-            # A vertical band of phase ramps
-            theta_2d = np.zeros((l, l))
-            k = self.controls.k_spin.value()
-            w = int(self.controls.p2_spin.value())
-            delta_phi = self.controls.p3_spin.value()
-
-            mid = l // 2
-            start = max(0, mid - w // 2)
-            end = min(l, start + w)
-
-            # Phase ramp along y
-            ramp = np.linspace(0, 2 * np.pi * k, l, endpoint=False)
-
-            for j in range(start, end):
-                # Apply ramp and inter-line phase shift
-                theta_2d[:, j] = ramp + (j - start) * delta_phi
-
-            y0[:n] = theta_2d.flatten()
-        elif preset == "Cross Domain":
-            # Four triangular domains (Upper/Lower = pi/2, Left/Right = -pi/2)
-            theta_2d = np.zeros((l, l))
-            yy, xx = np.indices((l, l))
-            # Diagonals: y=x and y=L-1-x
-            mask_upper = (yy < xx) & (yy < (l - 1 - xx))
-            mask_lower = (yy > xx) & (yy > (l - 1 - xx))
-            mask_left = (yy > xx) & (yy < (l - 1 - xx))
-            mask_right = (yy < xx) & (yy > (l - 1 - xx))
-
-            theta_2d[mask_upper] = np.pi / 2
-            theta_2d[mask_lower] = np.pi / 2
-            theta_2d[mask_left] = -np.pi / 2
-            theta_2d[mask_right] = -np.pi / 2
-            y0[:n] = theta_2d.flatten()
-        elif preset == "Vortex Pair":
-            # Two opposite vortices
-            yy, xx = np.indices((l, l))
-            mid = (l - 1) / 2.0
-            sep = self.controls.k_spin.value() / 2.0
-
-            # Vortex at (mid - sep, mid), Antivortex at (mid + sep, mid)
-            v1 = np.arctan2(yy - mid, xx - (mid - sep))
-            v2 = np.arctan2(yy - mid, xx - (mid + sep))
-            y0[:n] = (v1 - v2).flatten()
-        elif preset == "Skyrmion":
-            # Localized phase twist
-            yy, xx = np.indices((l, l))
-            mid = (l - 1) / 2.0
-            sigma = self.controls.k_spin.value()
-            r_sq = (xx - mid) ** 2 + (yy - mid) ** 2
-            y0[:n] = (np.pi * np.exp(-r_sq / (2 * sigma**2))).flatten()
-        elif preset == "Single Kick":
-            # Gaussian velocity kick (Wave Packet)
-            yy, xx = np.indices((l, l))
-            mid = (l - 1) / 2.0
-            omega_peak = self.controls.k_spin.value()
-            # Fixed width for the kick "drop"
-            sigma = 2.0
-            r_sq = (xx - mid) ** 2 + (yy - mid) ** 2
-            kick = omega_peak * np.exp(-r_sq / (2 * sigma**2))
-            y0[n:] = kick.flatten()
-        elif preset == "Thermalized":
-            # Random velocities (Maxwell-Boltzmann like)
-            # User provides mean energy epsilon.
-            # <K> = 1/2 * <omega^2> = 1/2 * sigma^2 = epsilon
-            # => sigma = sqrt(2 * epsilon)
-            epsilon = self.controls.k_spin.value()
-            sigma = np.sqrt(max(0, 2 * epsilon))
-            y0[n:] = np.random.normal(0, sigma, n)
-
-        # Add Thermal Noise Overlay (Phonons)
-        t_init = self.controls.temp_slider.value() / 100.0
-        if t_init > 0:
-            # sigma = sqrt(2 * T)
-            noise_sigma = np.sqrt(2.0 * t_init)
-            y0[n:] += np.random.normal(0, noise_sigma, n)
-
-        return y0
 
     def reinit_simulation(self, l_side: int):
         """Re-initialize the simulation with a new lattice size or preset."""
@@ -214,7 +137,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Update visualizer number of rotors
         self.visualizer.set_l_side(l_side)
-        QtCore.QTimer.singleShot(50, self.visualizer._update_disc_size)
 
         # Auto-disable arrows when L > threshold
         if l_side > self.visualizer.ARROW_THRESHOLD:

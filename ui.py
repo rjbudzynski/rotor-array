@@ -3,6 +3,7 @@ import numpy as np
 from PyQt6 import QtWidgets, QtCore, QtGui
 from typing import Callable
 from colors import theta_to_hue, hsv_to_rgb_array, omega_to_value
+from presets import PRESETS, get_preset_by_name
 
 
 class HelpDialog(QtWidgets.QDialog):
@@ -276,17 +277,11 @@ class ControlPanel(QtWidgets.QWidget):
         # Initial Conditions Preset
         self.preset_label = QtWidgets.QLabel("Initial Condition Preset:")
         self.preset_combo = QtWidgets.QComboBox()
-        self.preset_combo.addItem("Random Angles")
-        self.preset_combo.addItem("Twisted")
-        self.preset_combo.addItem("Domain Wall")
-        self.preset_combo.addItem("Vortex Band")
-        self.preset_combo.addItem("Cross Domain")
-        self.preset_combo.addItem("Vortex Pair")
-        self.preset_combo.addItem("Skyrmion")
-        self.preset_combo.addItem("Single Kick")
-        self.preset_combo.addItem("Thermalized")
+        for p in PRESETS:
+            self.preset_combo.addItem(p.name)
         self.layout.addWidget(self.preset_label)
         self.layout.addWidget(self.preset_combo)
+
 
         # Parameter 1 (k)
         self.k_widget = QtWidgets.QWidget()
@@ -402,56 +397,48 @@ class ControlPanel(QtWidgets.QWidget):
         self.arrows_checkbox.stateChanged.connect(self._on_arrows_changed)
 
     def _handle_preset_ui_change(self, index: int):
-        # Reset visibility
-        self.k_widget.setVisible(False)
-        self.p2_widget.setVisible(False)
-        self.p3_widget.setVisible(False)
+        preset_name = self.preset_combo.currentText()
+        p = get_preset_by_name(preset_name)
+        l = self.l_spin.value()
 
-        # 1: "Twisted", 3: "Vortex Band", 5: "Vortex Pair", 6: "Skyrmion", 7: "Single Kick", 8: "Thermalized"
-        if index == 1:
-            self.k_label.setText("Winding (k):")
-            self.k_spin.setDecimals(0)
-            self.k_spin.setSingleStep(1.0)
-            self.k_widget.setVisible(True)
-        elif index == 3:
-            self.k_label.setText("Wraps (k):")
-            self.k_spin.setDecimals(0)
-            self.k_spin.setSingleStep(1.0)
-            self.k_widget.setVisible(True)
-
-            self.p2_label.setText("Width (w):")
-            self.p2_spin.setDecimals(0)
-            self.p2_spin.setRange(1.0, self.l_spin.value())
+        # Update K control
+        self.k_label.setText(p.k_label)
+        self.k_spin.setDecimals(p.k_decimals)
+        self.k_spin.setSingleStep(p.k_step)
+        self.k_spin.setRange(p.k_min, p.k_max)
+        
+        k_val = p.k_default(l) if callable(p.k_default) else p.k_default
+        self.k_spin.setValue(k_val)
+        
+        # Update P2 control
+        if p.p2_label:
+            self.p2_label.setText(p.p2_label)
+            self.p2_spin.setDecimals(p.p2_decimals)
+            self.p2_spin.setSingleStep(p.p2_step)
+            self.p2_spin.setRange(p.p2_min, p.p2_max)
+            p2_val = p.p2_default(l) if callable(p.p2_default) else p.p2_default
+            self.p2_spin.setValue(p2_val)
             self.p2_widget.setVisible(True)
+        else:
+            self.p2_widget.setVisible(False)
 
-            self.p3_label.setText("Shift (\u03b4\u03c6):")
-            self.p3_spin.setDecimals(2)
-            self.p3_spin.setSingleStep(0.1)
+        # Update P3 control
+        if p.p3_label:
+            self.p3_label.setText(p.p3_label)
+            self.p3_spin.setDecimals(p.p3_decimals)
+            self.p3_spin.setSingleStep(p.p3_step)
+            self.p3_spin.setRange(p.p3_min, p.p3_max)
+            p3_val = p.p3_default(l) if callable(p.p3_default) else p.p3_default
+            self.p3_spin.setValue(p3_val)
             self.p3_widget.setVisible(True)
-        elif index == 5:
-            self.k_label.setText("Separation:")
-            self.k_spin.setDecimals(1)
-            self.k_spin.setSingleStep(1.0)
-            self.k_spin.setValue(self.l_spin.value() // 2)
-            self.k_widget.setVisible(True)
-        elif index == 6:
-            self.k_label.setText("Radius (\u03c3):")
-            self.k_spin.setDecimals(1)
-            self.k_spin.setSingleStep(1.0)
-            self.k_spin.setValue(max(2.0, self.l_spin.value() / 5.0))
-            self.k_widget.setVisible(True)
-        elif index == 7:
-            self.k_label.setText("Velocity (\u03c9):")
-            self.k_spin.setDecimals(2)
-            self.k_spin.setSingleStep(0.1)
-            self.k_widget.setVisible(True)
-        elif index == 8:
-            self.k_label.setText("Mean Energy (\u03b5):")
-            self.k_spin.setDecimals(2)
-            self.k_spin.setSingleStep(0.1)
-            if self.k_spin.value() <= 0:
-                self.k_spin.setValue(1.0)
-            self.k_widget.setVisible(True)
+        else:
+            self.p3_widget.setVisible(False)
+
+        # Always show K if it's not the default "Parameter:" or if it's explicitly needed
+        # Actually, let's show K for everything except "Random Angles", "Domain Wall", "Cross Domain"
+        show_k = preset_name not in ["Random Angles", "Domain Wall", "Cross Domain"]
+        self.k_widget.setVisible(show_k)
+
 
     def _on_j_changed(self, value: int):
         j = value / 100.0
