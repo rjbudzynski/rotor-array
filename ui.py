@@ -178,6 +178,82 @@ class ColorBarVisualizer(QtWidgets.QWidget):
         return colors
 
 
+class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
+    """
+    Visualizes the Fourier spectrum of the order parameter as a stem plot.
+    Shows frequency content of oscillations in the order parameter over time.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setFixedHeight(150)
+        self.setBackground(None)
+
+        self.plot = self.addPlot()
+        self.plot.setBackground("k")
+        self.plot.showGrid(x=True, y=True, alpha=0.3)
+        self.plot.setLabel("left", "Amplitude", units="")
+        self.plot.setLabel("bottom", "Frequency", units="Hz")
+        self.plot.setMenuEnabled(False)
+        self.plot.setMouseEnabled(x=False, y=False)
+
+        # Configure axes
+        font = QtGui.QFont()
+        font.setPointSize(8)
+        self.plot.getAxis("bottom").setTickFont(font)
+        self.plot.getAxis("left").setTickFont(font)
+
+        # Stem plot items
+        self.stem_lines = []
+        self.stem_symbols = None
+
+    def update_spectrum(self, frequencies: np.ndarray, magnitudes: np.ndarray):
+        """Update the stem plot with new FFT data.
+
+        Args:
+            frequencies: Array of frequency values (Hz)
+            magnitudes: Array of corresponding magnitude values
+        """
+        # Clear existing plot items
+        for item in self.stem_lines:
+            self.plot.removeItem(item)
+        self.stem_lines.clear()
+
+        if self.stem_symbols:
+            self.plot.removeItem(self.stem_symbols)
+            self.stem_symbols = None
+
+        if len(frequencies) == 0 or len(magnitudes) == 0:
+            return
+
+        # Limit frequency range for display (0-10 Hz should be reasonable)
+        freq_mask = frequencies <= 10.0
+        freq_display = frequencies[freq_mask]
+        mag_display = magnitudes[freq_mask]
+
+        if len(freq_display) == 0:
+            return
+
+        # Create stem plot: lines from baseline to each point
+        baseline = np.zeros_like(freq_display)
+        for i, (freq, mag) in enumerate(zip(freq_display, mag_display)):
+            line = pg.PlotCurveItem([freq, freq], [baseline[i], mag], pen=pg.mkPen("c", width=1))
+            self.plot.addItem(line)
+            self.stem_lines.append(line)
+
+        # Add markers at the top of each stem
+        self.stem_symbols = pg.ScatterPlotItem(
+            freq_display, mag_display, symbol="o", size=4, brush="c", pen="c"
+        )
+        self.plot.addItem(self.stem_symbols)
+
+        # Auto-scale axes
+        if len(freq_display) > 0:
+            self.plot.setXRange(0, max(10.0, np.max(freq_display) * 1.1), padding=0)
+            if len(mag_display) > 0 and np.max(mag_display) > 0:
+                self.plot.setYRange(0, np.max(mag_display) * 1.2, padding=0)
+
+
 class InfoPanel(QtWidgets.QWidget):
     """
     Informative panel showing monitoring data and legends.
@@ -230,6 +306,14 @@ class InfoPanel(QtWidgets.QWidget):
         self.order_curve = self.order_plot.plot(pen=pg.mkPen("y", width=1.5))
         main_layout.addWidget(self.order_plot)
 
+        main_layout.addSpacing(15)
+
+        # Fourier Spectrum Plot
+        self.fft_label = QtWidgets.QLabel("Fourier Spectrum:")
+        main_layout.addWidget(self.fft_label)
+        self.fft_plotter = FourierSpectrumPlotter()
+        main_layout.addWidget(self.fft_plotter)
+
         main_layout.addStretch()
 
     def update_order_plot(self, times: list[float], values: list[float]):
@@ -243,6 +327,10 @@ class InfoPanel(QtWidgets.QWidget):
                 self.order_plot.setXRange(0, 10, padding=0)
         else:
             self.order_plot.setXRange(0, 10, padding=0)
+
+    def update_fft_plot(self, frequencies: np.ndarray, magnitudes: np.ndarray):
+        """Update the FFT spectrum plot with new data."""
+        self.fft_plotter.update_spectrum(frequencies, magnitudes)
 
 
 class ControlPanel(QtWidgets.QWidget):
@@ -281,7 +369,6 @@ class ControlPanel(QtWidgets.QWidget):
             self.preset_combo.addItem(p.name)
         self.layout.addWidget(self.preset_label)
         self.layout.addWidget(self.preset_combo)
-
 
         # Parameter 1 (k)
         self.k_widget = QtWidgets.QWidget()
@@ -406,10 +493,10 @@ class ControlPanel(QtWidgets.QWidget):
         self.k_spin.setDecimals(p.k_decimals)
         self.k_spin.setSingleStep(p.k_step)
         self.k_spin.setRange(p.k_min, p.k_max)
-        
+
         k_val = p.k_default(l) if callable(p.k_default) else p.k_default
         self.k_spin.setValue(k_val)
-        
+
         # Update P2 control
         if p.p2_label:
             self.p2_label.setText(p.p2_label)
@@ -438,7 +525,6 @@ class ControlPanel(QtWidgets.QWidget):
         # Actually, let's show K for everything except "Random Angles", "Domain Wall", "Cross Domain"
         show_k = preset_name not in ["Random Angles", "Domain Wall", "Cross Domain"]
         self.k_widget.setVisible(show_k)
-
 
     def _on_j_changed(self, value: int):
         j = value / 100.0
