@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "build": "deno run -A build.ts",
+    "dev": "deno run -A build.ts --watch",
+    "serve": "deno run -A server.ts",
+    "test": "deno test"
+  },
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "deno.ns"]
+  },
+  "imports": {
+    "esbuild": "npm:esbuild@0.20.0",
+    "@std/http": "jsr:@std/http@0.224.0",
+    "@std/cli": "jsr:@std/cli@0.224.0"
+  }
+}
