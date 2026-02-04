@@ -30,25 +30,7 @@ export class MeanDirectionVisualizer {
                 
                 if (r > radius) continue;
                 
-                // Angle
-                // Visual theta=0 is down.
-                // In canvas, y is down.
-                // Math angle: atan2(dy, dx). 0 is Right.
-                // We want color to match visualizer.
-                // Visualizer: theta mapped to hue.
-                // If we want the wheel to show the color for a vector (cos, sin):
-                // Vector (0, -1) [Up] -> angle -pi/2. 
-                // Vector (0, 1) [Down] -> angle pi/2.
-                // Let's match the python logic.
-                // Python: coord_theta = atan2(y, x). math_theta = coord_theta + pi/2.
-                // hue = thetaToHue(math_theta).
-                
-                // Canvas Y is down. Normalized coordinates:
-                // nx = dx / radius, ny = dy / radius.
-                // atan2(ny, nx) matches Python's atan2(y, x).
-                
-                const angle = Math.atan2(dy, dx);
-                const mathTheta = angle - Math.PI / 2;
+                const mathTheta = Math.atan2(dx, dy);
                 const hue = thetaToHue(mathTheta);
                 
                 // Color

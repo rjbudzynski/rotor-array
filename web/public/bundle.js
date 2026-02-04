@@ -4772,8 +4772,7 @@ var MeanDirectionVisualizer = class {
         const r = Math.sqrt(dx * dx + dy * dy);
         if (r > radius)
           continue;
-        const angle = Math.atan2(dy, dx);
-        const mathTheta = angle - Math.PI / 2;
+        const mathTheta = Math.atan2(dx, dy);
         const hue = thetaToHue(mathTheta);
         const pixelIdx = (y * size + x) * 4;
         hsvToRgb(hue, 1, 0.8, data, pixelIdx);
