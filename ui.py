@@ -186,10 +186,15 @@ class FourierSpectrumPlotter(pg.PlotWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        self.setMinimumHeight(150)  # Set proper minimum height
+        self.setMaximumHeight(200)  # Prevent excessive vertical expansion
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         self.setBackground("k")
         self.showGrid(x=True, y=True, alpha=0.3)
         self.setLabel("left", "Amplitude", units="")
-        self.setLabel("bottom", "Frequency", units="Hz")
+        self.setLabel("bottom", "Frequency (Hz)")
         self.setMenuEnabled(False)
         self.setMouseEnabled(x=False, y=False)
 
