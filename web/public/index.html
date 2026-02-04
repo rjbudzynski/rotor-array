@@ -16,7 +16,19 @@
         input[type="number"], select { background: #444; color: white; border: 1px solid #555; padding: 2px 4px; border-radius: 3px; font-size: 0.85em; }
         .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
         #uplot-chart { height: 150px; width: 100%; background: #111; border: 1px solid #444; }
-        h1 { font-size: 1em; margin: 0 0 5px 0; color: #fff; }
+        h1 { font-size: 1em; margin: 0 0 5px 0; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+        #help-btn { background: #444; border: 1px solid #555; color: #ccc; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-weight: bold; font-size: 0.8em; }
+        #help-btn:hover { background: #555; color: #fff; }
+
+        #help-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        #help-modal { background: #222; padding: 25px; border-radius: 8px; max-width: 650px; max-height: 85vh; overflow-y: auto; position: relative; border: 1px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.5); line-height: 1.6; }
+        #help-modal h2 { margin-top: 0; color: #fff; border-bottom: 1px solid #444; padding-bottom: 8px; }
+        #help-modal h3 { color: #ddd; margin-bottom: 8px; }
+        #help-modal p, #help-modal li { color: #ccc; font-size: 0.95em; }
+        #help-modal ul { padding-left: 20px; }
+        #close-help { position: absolute; top: 15px; right: 15px; background: none; border: none; color: #888; font-size: 24px; cursor: pointer; line-height: 1; }
+        #close-help:hover { color: #fff; }
+
         button { background: #555; color: white; border: 1px solid #666; padding: 4px 10px; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 0.85em; }
         button:hover { background: #666; }
         button.active { background: #d32f2f; border-color: #b71c1c; }
@@ -27,6 +39,7 @@
         .legend-color { width: 12px; height: 12px; border-radius: 2px; }
     </style>
     <link rel="stylesheet" href="uPlot.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 </head>
 <body>
     <div id="app">
@@ -34,7 +47,7 @@
             <canvas id="sim-canvas"></canvas>
         </div>
         <div id="sidebar">
-            <h1>Rotor Array</h1>
+            <h1>Rotor Array <button id="help-btn" title="Help">?</button></h1>
             
             <div id="controls-container">
                 <!-- Controls will be injected here -->
@@ -55,5 +68,56 @@
         </div>
     </div>
     <script type="module" src="bundle.js"></script>
+
+    <div id="help-overlay">
+        <div id="help-modal">
+            <button id="close-help">&times;</button>
+            <div id="help-content">
+                <h2>Rotor Array Simulation - Help</h2>
+                <p>This application simulates an L &times; L square array of coupled planar rotors subjected to a uniform external field, with periodic boundary conditions in both directions.</p>
+                
+                <h3>Physics Overview</h3>
+                <div style="text-align: center; margin: 15px 0;">
+                    <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><mfrac><mn>1</mn><mn>2</mn></mfrac><msubsup><mover accent="true"><mi>θ</mi><mo>˙</mo></mover><mi>i</mi><mn>2</mn></msubsup><mo>−</mo><mi>J</mi><munder><mo>∑</mo><mrow><mo stretchy="false">⟨</mo><mi>i</mi><mo separator="true">,</mo><mi>j</mi><mo stretchy="false">⟩</mo></mrow></munder><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>θ</mi><mi>i</mi></msub><mo>−</mo><msub><mi>θ</mi><mi>j</mi></msub><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mo>+</mo><mi>M</mi><munder><mo>∑</mo><mi>i</mi></munder><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>θ</mi><mi>i</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathcal{L} = \sum_{i} \frac{1}{2} \dot{\theta}_i^2 - J \sum_{\langle i,j \rangle} (1 - \cos(\theta_i - \theta_j)) + M \sum_{i} \cos(\theta_i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathcal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.5991em;vertical-align:-1.2777em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9313em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span></span><span style="top:-3.2634em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.0556em;"><span class="mord">˙</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641em;"><span style="top:-2.453em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.566em;vertical-align:-1.516em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.809em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">⟨</span><span class="mord mathnormal mtight">i</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span><span class="mclose mtight">⟩</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.516em;"><span></span></span></span></span></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">cos</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0361em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">))</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.3277em;vertical-align:-1.2777em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">cos</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+                </div>
+                <p>The system consists of N = L&sup2; rotors on a square lattice. Each rotor interacts with its four nearest neighbors via a coupling constant J and responds to an external field M.</p>
+                <ul>
+                    <li><strong>Coupling (J)</strong>: Determines how strongly rotors want to align with their neighbors.</li>
+                    <li><strong>Field (M)</strong>: Determines how strongly rotors want to align with the vertical downward direction (&theta; = 0).</li>
+                    <li><strong>Order Parameter (r)</strong>: Measures the synchronization of the system. A value of 1.0 means all rotors are perfectly aligned.</li>
+                </ul>
+
+                <h3>Controls</h3>
+                <p><strong>Simulation Parameters</strong></p>
+                <ul>
+                    <li><strong>Lattice Side (L)</strong>: Adjust the dimension of the square lattice. Changeable only when paused.</li>
+                    <li><strong>Initial Condition Preset</strong>: Choose a starting configuration:
+                        <ul>
+                            <li><strong>Random Angles</strong>: High entropy start.</li>
+                            <li><strong>Twisted</strong>: Topological winding state. Use <strong>Winding (k)</strong> to set full rotations.</li>
+                            <li><strong>Domain Wall</strong>: Split configuration (left/right).</li>
+                            <li><strong>Vortex Pair</strong>: Opposite topological charges.</li>
+                            <li><strong>Skyrmion</strong>: Localized phase twist.</li>
+                            <li><strong>Thermalized</strong>: Random velocities assigned to rotors.</li>
+                        </ul>
+                    </li>
+                    <li><strong>Coupling (J)</strong> &amp; <strong>Field (M)</strong>: Real-time sliders for interaction and field strength.</li>
+                </ul>
+                
+                <p><strong>Controls &amp; Monitors</strong></p>
+                <ul>
+                    <li><strong>Start/Stop</strong>: Runs or pauses the integration.</li>
+                    <li><strong>Reset</strong>: Restores initial conditions and stops simulation.</li>
+                    <li><strong>Order Parameter Plot</strong>: Shows the history of system synchronization.</li>
+                </ul>
+
+                <h3>Visualization</h3>
+                <ul>
+                    <li><strong>Hue</strong>: Represents the rotor's angular variable &theta; &in; [0, 2&pi;). &theta; = 0 corresponds to pointing straight down.</li>
+                    <li><strong>Luminosity</strong>: Brighter colors indicate higher kinetic energy (&omega;&sup2;). Zero energy is dim but visible.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

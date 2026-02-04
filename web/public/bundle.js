@@ -5176,6 +5176,22 @@ controls.onStartStop = (r) => {
   running = r;
 };
 requestAnimationFrame(loop);
+var helpBtn = document.getElementById("help-btn");
+var helpOverlay = document.getElementById("help-overlay");
+var closeHelp = document.getElementById("close-help");
+helpBtn?.addEventListener("click", () => {
+  if (helpOverlay)
+    helpOverlay.style.display = "flex";
+});
+closeHelp?.addEventListener("click", () => {
+  if (helpOverlay)
+    helpOverlay.style.display = "none";
+});
+helpOverlay?.addEventListener("click", (e) => {
+  if (e.target === helpOverlay) {
+    helpOverlay.style.display = "none";
+  }
+});
 setTimeout(() => {
   controls.triggerReset();
 }, 100);

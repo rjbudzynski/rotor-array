@@ -16,6 +16,7 @@
     "jsr:@std/path@^1.0.6": "1.1.4",
     "jsr:@std/streams@0.224": "0.224.5",
     "npm:esbuild@0.20.0": "0.20.0",
+    "npm:katex@0.16.11": "0.16.11",
     "npm:uplot@1.6.30": "1.6.30"
   },
   "jsr": {
@@ -197,6 +198,9 @@
       "os": ["win32"],
       "cpu": ["x64"]
     },
+    "commander@8.3.0": {
+      "integrity": "sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww=="
+    },
     "esbuild@0.20.0": {
       "integrity": "sha512-6iwE3Y2RVYCME1jLpBqq7LQWK3MW6vjV2bZy6gt/WrqkY+WE74Spyc0ThAOYpMtITvnjX09CrC6ym7A/m9mebA==",
       "optionalDependencies": [
@@ -227,6 +231,13 @@
       "scripts": true,
       "bin": true
     },
+    "katex@0.16.11": {
+      "integrity": "sha512-RQrI8rlHY92OLf3rho/Ts8i/XvjgguEjOkO1BEXcU3N8BqPpSzBNwV/G0Ukr+P/l3ivvJUE/Fa/CwbS6HesGNQ==",
+      "dependencies": [
+        "commander"
+      ],
+      "bin": true
+    },
     "uplot@1.6.30": {
       "integrity": "sha512-48oVVRALM/128ttW19F2a2xobc2WfGdJ0VJFX00099CfqbCTuML7L2OrTKxNzeFP34eo1+yJbqFSoFAp2u28/Q=="
     }
@@ -237,6 +248,7 @@
       "jsr:@std/cli@0.224.0",
       "jsr:@std/http@0.224.0",
       "npm:esbuild@0.20.0",
+      "npm:katex@0.16.11",
       "npm:uplot@1.6.30"
     ]
   }

@@ -77,6 +77,25 @@ controls.onStartStop = (r) => {
 // Start loop
 requestAnimationFrame(loop);
 
+// Help Modal Logic
+const helpBtn = document.getElementById("help-btn");
+const helpOverlay = document.getElementById("help-overlay");
+const closeHelp = document.getElementById("close-help");
+
+helpBtn?.addEventListener("click", () => {
+    if (helpOverlay) helpOverlay.style.display = "flex";
+});
+
+closeHelp?.addEventListener("click", () => {
+    if (helpOverlay) helpOverlay.style.display = "none";
+});
+
+helpOverlay?.addEventListener("click", (e) => {
+    if (e.target === helpOverlay) {
+        helpOverlay.style.display = "none";
+    }
+});
+
 // Initial Trigger to load default state
 // We wrap in setTimeout to ensure UI is fully rendered/sized
 setTimeout(() => {
