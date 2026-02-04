@@ -190,7 +190,6 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         self.setBackground(None)
 
         self.plot = self.addPlot()
-        self.plot.setBackground("k")
         self.plot.showGrid(x=True, y=True, alpha=0.3)
         self.plot.setLabel("left", "Amplitude", units="")
         self.plot.setLabel("bottom", "Frequency", units="Hz")
