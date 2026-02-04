@@ -44,12 +44,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.time_scale = 1.0
         self.order_history: deque[tuple[float, float]] = deque()
 
-        # FFT data buffer for Fourier spectrum (30 seconds of data)
-        self.fft_buffer: deque[tuple[float, float]] = deque()
-        self.fft_update_timer = QtCore.QTimer()
-        self.fft_update_timer.timeout.connect(self.update_fft_spectrum)
-        self.fft_update_timer.start(10000)  # Update every 10 seconds
-
         # UI
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
@@ -67,7 +61,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Connect controls
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
-
+        
         # Connect other controls that trigger re-initialization
         reinit_triggers = [
             self.controls.preset_combo.currentIndexChanged,
@@ -118,6 +112,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.visualizer.set_l_side(self.l_side)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
 
+
     def get_initial_state(self) -> np.ndarray:
         """Generate initial state based on the selected preset."""
         return generate_initial_state(
@@ -128,6 +123,7 @@ class MainWindow(QtWidgets.QMainWindow):
             p3=self.controls.p3_spin.value(),
             temp=self.controls.temp_slider.value() / 100.0,
         )
+
 
     def reinit_simulation(self, l_side: int):
         """Re-initialize the simulation with a new lattice size or preset."""
@@ -212,7 +208,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.engine.set_state(self.y0)
         self.order_history.clear()
-        self.fft_buffer.clear()
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
 
@@ -221,7 +216,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
         self.info_panel.update_order_plot([], [])
-        self.info_panel.update_fft_plot([], [])
 
     def update_energy_display(self):
         energy = self.engine.get_energy()
@@ -237,16 +231,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 op = self.engine.get_order_parameter()
                 self.order_history.append((self.engine.t, op.r))
 
-                # Add to FFT buffer (sample for FFT analysis)
-                self.fft_buffer.append((self.engine.t, op.r))
-
                 # Prune history to 10s window
                 while self.order_history and self.order_history[0][0] < self.engine.t - 10:
                     self.order_history.popleft()
-
-                # Prune FFT buffer to 30s window
-                while self.fft_buffer and self.fft_buffer[0][0] < self.engine.t - 30:
-                    self.fft_buffer.popleft()
 
                 # Update visualization
                 self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
@@ -283,26 +270,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Unexpected error in simulation:\n{e}\n\n"
                 "Please check the logs and restart the application.",
             )
-
-    def update_fft_spectrum(self):
-        """Update FFT spectrum plot with current FFT buffer data."""
-        if len(self.fft_buffer) < 10:  # Need minimum data points
-            return
-
-        # Extract order parameter values for FFT
-        values = np.array([point[1] for point in self.fft_buffer])
-
-        # Compute FFT
-        fft_values = np.fft.fft(values)
-        fft_freq = np.fft.fftfreq(len(values), d=self.dt * self.time_scale)
-
-        # Only take positive frequencies
-        positive_freq_idx = fft_freq > 0
-        fft_freq_positive = fft_freq[positive_freq_idx]
-        fft_magnitude = np.abs(fft_values[positive_freq_idx])
-
-        # Update info panel with FFT data
-        self.info_panel.update_fft_plot(fft_freq_positive, fft_magnitude)
 
 
 def main():
