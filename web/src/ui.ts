@@ -48,7 +48,7 @@ export class MeanDirectionVisualizer {
                 // atan2(ny, nx) matches Python's atan2(y, x).
                 
                 const angle = Math.atan2(dy, dx);
-                const mathTheta = angle + Math.PI / 2;
+                const mathTheta = angle - Math.PI / 2;
                 const hue = thetaToHue(mathTheta);
                 
                 // Color
@@ -63,34 +63,14 @@ export class MeanDirectionVisualizer {
     }
     
     update(r: number, meanCos: number, meanSin: number) {
-        // Redraw wheel? No, static. Just clear and draw slit?
-        // But wheel is complex.
-        // We should layer. Draw wheel once, then draw slit on top?
-        // If we putImageData, we overwrite.
-        // Better: Draw wheel to an offscreen canvas or keep it, and draw it then slit.
-        // Or just re-render wheel (it's small, 200x200). 
-        // 40k pixels. Fast enough.
-        
         this.renderWheel();
         
         const size = this.canvas.width;
         const center = size / 2;
         const radius = center * 0.9;
         
-        // Slit
-        // Vector (meanSin, -meanCos) ??
-        // Python: slit data [0, mean_sin], [0, -mean_cos].
-        // Plot coordinates: X=mean_sin, Y=-mean_cos.
-        // Wait, Python plot X is horizontal, Y is vertical.
-        // If slit is from (0,0) to (mean_sin, -mean_cos).
-        // That means the vector points to (mean_sin, -mean_cos).
-        // Let's verify rotation.
-        // If theta=0, cos=1, sin=0. Vector=(0, -1). 
-        // In Python plot (standard Cartesian), (0, -1) is DOWN.
-        // Correct.
-        
         const vecX = meanSin;
-        const vecY = -meanCos;
+        const vecY = meanCos;
         
         // Draw line from center to center + vec * radius
         this.ctx.strokeStyle = "black";
@@ -414,13 +394,15 @@ export class OrderPlot {
         const opts = {
             width: el?.clientWidth || 300,
             height: 150,
+            cursor: { show: false },
+            legend: { show: false },
+            padding: [8, 12, 12, 2],
             series: [
                 {},
                 {
                     stroke: "yellow",
                     width: 2,
                     label: "Order Parameter (r)",
-                    value: (u, v) => v == null ? "-" : v.toFixed(3)
                 }
             ],
             scales: {
@@ -428,8 +410,8 @@ export class OrderPlot {
                 y: { range: [0, 1.1] }
             },
             axes: [
-                { stroke: "#ccc", grid: { stroke: "#333" } },
-                { stroke: "#ccc", grid: { stroke: "#333" } }
+                { stroke: "#ccc", grid: { stroke: "#333" }, size: 25 },
+                { stroke: "#ccc", grid: { stroke: "#333" }, size: 30 }
             ]
         };
         

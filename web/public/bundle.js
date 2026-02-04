@@ -366,7 +366,7 @@ var RotorArrayVisualizer = class {
         const cx = c * S + centerOffset;
         const cy = r * S + centerOffset;
         const ex = cx + arrowLen * Math.sin(th);
-        const ey = cy - arrowLen * Math.cos(th);
+        const ey = cy + arrowLen * Math.cos(th);
         ctx.moveTo(cx, cy);
         ctx.lineTo(ex, ey);
       }
@@ -4773,7 +4773,7 @@ var MeanDirectionVisualizer = class {
         if (r > radius)
           continue;
         const angle = Math.atan2(dy, dx);
-        const mathTheta = angle + Math.PI / 2;
+        const mathTheta = angle - Math.PI / 2;
         const hue = thetaToHue(mathTheta);
         const pixelIdx = (y * size + x) * 4;
         hsvToRgb(hue, 1, 0.8, data, pixelIdx);
@@ -4788,7 +4788,7 @@ var MeanDirectionVisualizer = class {
     const center = size / 2;
     const radius = center * 0.9;
     const vecX = meanSin;
-    const vecY = -meanCos;
+    const vecY = meanCos;
     this.ctx.strokeStyle = "black";
     this.ctx.lineWidth = 4;
     this.ctx.beginPath();
@@ -5044,13 +5044,15 @@ var OrderPlot = class {
     const opts = {
       width: el?.clientWidth || 300,
       height: 150,
+      cursor: { show: false },
+      legend: { show: false },
+      padding: [8, 12, 12, 2],
       series: [
         {},
         {
           stroke: "yellow",
           width: 2,
-          label: "Order Parameter (r)",
-          value: (u, v) => v == null ? "-" : v.toFixed(3)
+          label: "Order Parameter (r)"
         }
       ],
       scales: {
@@ -5058,8 +5060,8 @@ var OrderPlot = class {
         y: { range: [0, 1.1] }
       },
       axes: [
-        { stroke: "#ccc", grid: { stroke: "#333" } },
-        { stroke: "#ccc", grid: { stroke: "#333" } }
+        { stroke: "#ccc", grid: { stroke: "#333" }, size: 25 },
+        { stroke: "#ccc", grid: { stroke: "#333" }, size: 30 }
       ]
     };
     this.uplot = new uPlot(opts, this.data, el);

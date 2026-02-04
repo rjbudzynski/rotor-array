@@ -156,7 +156,7 @@ export class RotorArrayVisualizer {
                 const cy = r * S + centerOffset;
                 
                 const ex = cx + arrowLen * Math.sin(th);
-                const ey = cy - arrowLen * Math.cos(th);
+                const ey = cy + arrowLen * Math.cos(th);
                 
                 ctx.moveTo(cx, cy);
                 ctx.lineTo(ex, ey);
