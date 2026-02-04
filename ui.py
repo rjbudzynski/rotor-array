@@ -178,7 +178,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
         return colors
 
 
-class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
+class FourierSpectrumPlotter(pg.PlotWidget):
     """
     Visualizes the Fourier spectrum of the order parameter as a stem plot.
     Shows frequency content of oscillations in the order parameter over time.
@@ -186,26 +186,21 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred
-        )
-        self.setBackground(None)
-
-        self.plot = self.addPlot()
-        self.plot.showGrid(x=True, y=True, alpha=0.3)
-        self.plot.setLabel("left", "Amplitude", units="")
-        self.plot.setLabel("bottom", "Frequency", units="Hz")
-        self.plot.setMenuEnabled(False)
-        self.plot.setMouseEnabled(x=False, y=False)
+        self.setBackground("k")
+        self.showGrid(x=True, y=True, alpha=0.3)
+        self.setLabel("left", "Amplitude", units="")
+        self.setLabel("bottom", "Frequency", units="Hz")
+        self.setMenuEnabled(False)
+        self.setMouseEnabled(x=False, y=False)
 
         # Set log scale for X-axis
-        self.plot.setLogMode(x=True, y=False)
+        self.setLogMode(x=True, y=False)
 
         # Configure axes
         font = QtGui.QFont()
         font.setPointSize(8)
-        self.plot.getAxis("bottom").setTickFont(font)
-        self.plot.getAxis("left").setTickFont(font)
+        self.getAxis("bottom").setTickFont(font)
+        self.getAxis("left").setTickFont(font)
 
         # Stem plot items
         self.stem_lines = []
@@ -220,18 +215,18 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         """
         # Clear existing plot items
         for item in self.stem_lines:
-            self.plot.removeItem(item)
+            self.removeItem(item)
         self.stem_lines.clear()
 
         if self.stem_symbols:
-            self.plot.removeItem(self.stem_symbols)
+            self.removeItem(self.stem_symbols)
             self.stem_symbols = None
 
         if len(frequencies) == 0 or len(magnitudes) == 0:
             return
 
-        # Filter out very low frequencies that don't work well with log scale
-        freq_mask = (frequencies > 0.01) & (frequencies <= 50.0)  # 0.01 Hz to 50 Hz range
+        # Filter frequencies to reasonable range (0.1 Hz to Nyquist frequency)
+        freq_mask = (frequencies >= 0.1) & (frequencies <= 25.0)  # 0.1 Hz to 25 Hz range
         freq_display = frequencies[freq_mask]
         mag_display = magnitudes[freq_mask]
 
@@ -242,23 +237,23 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         baseline = np.zeros_like(freq_display)
         for i, (freq, mag) in enumerate(zip(freq_display, mag_display)):
             line = pg.PlotCurveItem([freq, freq], [baseline[i], mag], pen=pg.mkPen("c", width=1))
-            self.plot.addItem(line)
+            self.addItem(line)
             self.stem_lines.append(line)
 
         # Add markers at the top of each stem
         self.stem_symbols = pg.ScatterPlotItem(
             freq_display, mag_display, symbol="o", size=4, brush="c", pen="c"
         )
-        self.plot.addItem(self.stem_symbols)
+        self.addItem(self.stem_symbols)
 
         # Auto-scale axes for log scale
         if len(freq_display) > 0:
             # For log scale, set appropriate range from minimum positive frequency to max
-            min_freq = max(0.01, np.min(freq_display))
+            min_freq = max(0.1, np.min(freq_display))
             max_freq = max(1.0, np.max(freq_display))
-            self.plot.setXRange(min_freq, max_freq, padding=0)
+            self.setXRange(min_freq, max_freq, padding=0)
             if len(mag_display) > 0 and np.max(mag_display) > 0:
-                self.plot.setYRange(0, np.max(mag_display) * 1.2, padding=0)
+                self.setYRange(0, np.max(mag_display) * 1.2, padding=0)
 
 
 class InfoPanel(QtWidgets.QWidget):
