@@ -186,7 +186,7 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setFixedHeight(150)
+        self.setMinimumHeight(180)  # Increased height for better visibility
         self.setBackground(None)
 
         self.plot = self.addPlot()
@@ -195,6 +195,9 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         self.plot.setLabel("bottom", "Frequency", units="Hz")
         self.plot.setMenuEnabled(False)
         self.plot.setMouseEnabled(x=False, y=False)
+
+        # Set log scale for X-axis
+        self.plot.setLogMode(x=True, y=False)
 
         # Configure axes
         font = QtGui.QFont()
@@ -225,8 +228,8 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         if len(frequencies) == 0 or len(magnitudes) == 0:
             return
 
-        # Limit frequency range for display (0-10 Hz should be reasonable)
-        freq_mask = frequencies <= 10.0
+        # Filter out very low frequencies that don't work well with log scale
+        freq_mask = (frequencies > 0.01) & (frequencies <= 50.0)  # 0.01 Hz to 50 Hz range
         freq_display = frequencies[freq_mask]
         mag_display = magnitudes[freq_mask]
 
@@ -246,9 +249,12 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
         )
         self.plot.addItem(self.stem_symbols)
 
-        # Auto-scale axes
+        # Auto-scale axes for log scale
         if len(freq_display) > 0:
-            self.plot.setXRange(0, max(10.0, np.max(freq_display) * 1.1), padding=0)
+            # For log scale, set appropriate range from minimum positive frequency to max
+            min_freq = max(0.01, np.min(freq_display))
+            max_freq = max(1.0, np.max(freq_display))
+            self.plot.setXRange(min_freq, max_freq, padding=0)
             if len(mag_display) > 0 and np.max(mag_display) > 0:
                 self.plot.setYRange(0, np.max(mag_display) * 1.2, padding=0)
 
@@ -260,7 +266,7 @@ class InfoPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setMinimumWidth(220)
+        self.setMinimumWidth(250)  # Increased width for better plot visibility
         main_layout = QtWidgets.QVBoxLayout(self)
 
         # Energy monitor
