@@ -186,9 +186,7 @@ class FourierSpectrumPlotter(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred
-        )
+        self.setMinimumHeight(180)  # Increased height for better visibility
         self.setBackground(None)
 
         self.plot = self.addPlot()
@@ -268,7 +266,7 @@ class InfoPanel(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.setMinimumWidth(280)  # Further increased width for better plot visibility
+        self.setMinimumWidth(250)  # Increased width for better plot visibility
         main_layout = QtWidgets.QVBoxLayout(self)
 
         # Energy monitor
