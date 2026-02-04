@@ -1,6 +1,6 @@
 import { SimulationEngine } from "./simulation.ts";
 import { RotorArrayVisualizer } from "./visualizer.ts";
-import { ControlPanel, MeanDirectionVisualizer, OrderPlot } from "./ui.ts";
+import { ControlPanel, MeanDirectionVisualizer, OrderPlot, ColorBarVisualizer } from "./ui.ts";
 import { generateInitialState } from "./presets.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -10,6 +10,7 @@ const visualizer = new RotorArrayVisualizer(canvas);
 const mdViz = new MeanDirectionVisualizer(mdCanvas);
 const plot = new OrderPlot("uplot-chart");
 const controls = new ControlPanel("controls-container");
+new ColorBarVisualizer("color-bar-container");
 
 let engine: SimulationEngine | null = null;
 let running = false;

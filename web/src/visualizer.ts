@@ -11,39 +11,27 @@ export class RotorArrayVisualizer {
     
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-        const ctx = canvas.getContext("2d", { alpha: false });
+        const ctx = canvas.getContext("2d", { alpha: true });
         if (!ctx) throw new Error("No 2D Context");
         this.ctx = ctx;
     }
     
     setLSide(l: number) {
-        // We assume the canvas container has a size, and we fit the canvas to it.
-        // For simplicity, we query the canvas's current display size (or parent).
-        // If not attached yet, we might get 0. 
-        // We'll rely on the caller to ensure canvas is sized or we default.
-        let width = this.canvas.clientWidth;
-        let height = this.canvas.clientHeight;
-        if (width === 0) width = 600;
-        if (height === 0) height = 600;
+        // Find best size
+        const container = this.canvas.parentElement;
+        let width = container ? container.clientWidth - 40 : 600;
+        let height = container ? container.clientHeight - 40 : 600;
         
-        const size = Math.min(width, height);
+        const size = Math.max(100, Math.min(width, height));
         
-        // upsample = floor(size / l)
-        const newUpsample = Math.floor(size / l);
-        
-        // Force update if L changed or size mismatch
-        // We also want to resize the canvas internal resolution to match L * upsample
-        // to avoid blur.
-        
-        if (this.lSide !== l || this.upsample !== newUpsample || this.canvas.width !== size) {
+        const newUpsample = Math.max(1, Math.floor(size / l));
+        const actualSize = l * newUpsample;
+
+        if (this.lSide !== l || this.upsample !== newUpsample || this.canvas.width !== actualSize) {
             this.lSide = l;
             this.upsample = newUpsample;
-            
-            // Set internal resolution
-            const actualSize = l * newUpsample;
             this.canvas.width = actualSize;
             this.canvas.height = actualSize;
-            
             this.updateBuffers();
         }
     }
@@ -79,8 +67,13 @@ export class RotorArrayVisualizer {
         const mask = this.mask;
         const totalW = L * S;
         
-        // Clear background to black
-        new Uint32Array(data.buffer).fill(0xFF000000); 
+        // Clear background to black opaque
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = 0;
+            data[i+1] = 0;
+            data[i+2] = 0;
+            data[i+3] = 255;
+        }
         
         for(let r=0; r<L; r++) {
             for(let c=0; c<L; c++) {

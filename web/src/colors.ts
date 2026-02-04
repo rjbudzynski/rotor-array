@@ -4,7 +4,7 @@ export function thetaToHue(theta: number): number {
     return h;
 }
 
-export function omegaToValue(omegaSq: number, valMin = 0.2, valMax = 0.8): number {
+export function omegaToValue(omegaSq: number, valMin = 0.4, valMax = 0.8): number {
     const energyFactor = Math.tanh(omegaSq / 5.0);
     return valMin + (valMax - valMin) * energyFactor;
 }

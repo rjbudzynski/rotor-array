@@ -1,7 +1,6 @@
 import { PRESETS, getPresetByName, PresetInfo } from "./presets.ts";
-import { thetaToHue, hsvToRgb } from "./colors.ts";
-
-declare const uPlot: any;
+import { thetaToHue, hsvToRgb, omegaToValue } from "./colors.ts";
+import uPlot from "uplot";
 
 export class MeanDirectionVisualizer {
     canvas: HTMLCanvasElement;
@@ -454,5 +453,52 @@ export class OrderPlot {
     reset() {
         this.data = [[], []];
         this.uplot.setData(this.data);
+    }
+}
+
+export class ColorBarVisualizer {
+    container: HTMLElement;
+    
+    constructor(containerId: string) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        this.container = el;
+        this.render();
+    }
+    
+    render() {
+        this.container.innerHTML = `
+            <div style="font-size: 10px; color: #aaa; margin-bottom: 2px;">Angle (0 → 2π)</div>
+            <div id="angle-bar" style="height: 12px; width: 100%; margin-bottom: 8px; border-radius: 2px;"></div>
+            <div style="font-size: 10px; color: #aaa; margin-bottom: 2px;">Energy (Dark → Bright)</div>
+            <div id="energy-bar" style="height: 12px; width: 100%; border-radius: 2px;"></div>
+        `;
+        
+        const angleBar = this.container.querySelector("#angle-bar") as HTMLElement;
+        const energyBar = this.container.querySelector("#energy-bar") as HTMLElement;
+        
+        // Angle gradient
+        let angleGrad = "linear-gradient(to right";
+        for (let i = 0; i <= 10; i++) {
+            const h = i / 10;
+            const rgb = new Uint8ClampedArray(3);
+            hsvToRgb(h, 1.0, 0.8, rgb, 0);
+            angleGrad += `, rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+        }
+        angleGrad += ")";
+        angleBar.style.background = angleGrad;
+        
+        // Energy gradient
+        let energyGrad = "linear-gradient(to right";
+        for (let i = 0; i <= 10; i++) {
+            const e = i / 2; // Map 0..5
+            const v = omegaToValue(e);
+            // Use red as base
+            const rgb = new Uint8ClampedArray(3);
+            hsvToRgb(0, 1.0, v, rgb, 0);
+            energyGrad += `, rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+        }
+        energyGrad += ")";
+        energyBar.style.background = energyGrad;
     }
 }
