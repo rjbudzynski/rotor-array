@@ -1,4 +1,4 @@
-import { thetaToHue, omegaToValue } from "./colors.ts";
+import { thetaToHue, omegaToValue, getLutColor } from "./colors.ts";
 
 export class RotorArrayVisualizer {
     canvas: HTMLCanvasElement;
@@ -11,7 +11,7 @@ export class RotorArrayVisualizer {
     
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-        const ctx = canvas.getContext("2d", { alpha: true });
+        const ctx = canvas.getContext("2d", { alpha: true, willReadFrequently: true });
         if (!ctx) throw new Error("No 2D Context");
         this.ctx = ctx;
     }
@@ -43,86 +43,79 @@ export class RotorArrayVisualizer {
         this.imageData = new ImageData(size, size);
         
         const S = this.upsample;
-        this.mask = new Uint8Array(S * S);
-        const center = (S - 1) / 2.0;
-        const radius = 0.45 * S;
-        
-        for(let y=0; y<S; y++) {
-            for(let x=0; x<S; x++) {
-                const dist = Math.sqrt((x-center)**2 + (y-center)**2);
-                let a = 0;
-                if (dist < radius - 0.5) a = 255;
-                else if (dist < radius + 0.5) a = Math.floor(255 * (radius + 0.5 - dist));
-                this.mask[y*S + x] = a;
+        // High LOD: only compute mask if discs are large enough
+        if (S >= 4) {
+            this.mask = new Uint8Array(S * S);
+            const center = (S - 1) / 2.0;
+            const radius = 0.45 * S;
+            
+            for(let y=0; y<S; y++) {
+                for(let x=0; x<S; x++) {
+                    const dist = Math.sqrt((x-center)**2 + (y-center)**2);
+                    let a = 0;
+                    if (dist < radius - 0.5) a = 255;
+                    else if (dist < radius + 0.5) a = Math.floor(255 * (radius + 0.5 - dist));
+                    this.mask[y*S + x] = a;
+                }
             }
+        } else {
+            this.mask = null;
         }
     }
     
     update(theta: Float64Array, omega: Float64Array, showArrows: boolean) {
-        if (!this.imageData || !this.mask || this.upsample <= 0) return;
+        if (!this.imageData || this.upsample <= 0) return;
         
         const L = this.lSide;
         const S = this.upsample;
         const data = this.imageData.data;
-        const mask = this.mask;
         const totalW = L * S;
+        const mask = this.mask;
         
         // Clear background to black opaque
-        for (let i = 0; i < data.length; i += 4) {
-            data[i] = 0;
-            data[i+1] = 0;
-            data[i+2] = 0;
-            data[i+3] = 255;
-        }
+        new Uint32Array(data.buffer).fill(0xFF000000);
+        
+        const color = new Uint8Array(3);
         
         for(let r=0; r<L; r++) {
+            const startY = r * S;
             for(let c=0; c<L; c++) {
                 const idx = r * L + c;
-                const th = theta[idx];
-                const om = omega[idx];
-                
-                const hue = thetaToHue(th);
-                const val = omegaToValue(om * om);
-                
-                // HSV to RGB inline
-                const h = hue;
-                const v = val;
-                
-                const i = Math.floor(h * 6);
-                const f = h * 6 - i;
-                const q = v * (1 - f);
-                const t = v * f;
-                
-                let rr=0, gg=0, bb=0;
-                const ii = i % 6;
-                switch(ii) {
-                    case 0: rr=v; gg=t; bb=0; break;
-                    case 1: rr=q; gg=v; bb=0; break;
-                    case 2: rr=0; gg=v; bb=t; break;
-                    case 3: rr=0; gg=q; bb=v; break;
-                    case 4: rr=t; gg=0; bb=v; break;
-                    case 5: rr=v; gg=0; bb=q; break;
-                }
-                
-                const rInt = Math.floor(rr * 255);
-                const gInt = Math.floor(gg * 255);
-                const bInt = Math.floor(bb * 255);
-                
-                const startY = r * S;
                 const startX = c * S;
                 
-                for(let my=0; my<S; my++) {
-                    const rowIdx = (startY + my) * totalW * 4;
-                    const mRowIdx = my * S;
-                    for(let mx=0; mx<S; mx++) {
-                        const alpha = mask[mRowIdx + mx];
-                        if (alpha === 0) continue;
-                        
-                        const pIdx = rowIdx + (startX + mx) * 4;
-                        data[pIdx] = rInt;
-                        data[pIdx+1] = gInt;
-                        data[pIdx+2] = bInt;
-                        data[pIdx+3] = alpha; 
+                // Fast LUT lookup
+                getLutColor(theta[idx], omega[idx]**2, color, 0);
+                const rInt = color[0];
+                const gInt = color[1];
+                const bInt = color[2];
+                
+                if (mask) {
+                    // High LOD: use mask
+                    for(let my=0; my<S; my++) {
+                        const rowIdx = (startY + my) * totalW * 4;
+                        const mRowIdx = my * S;
+                        for(let mx=0; mx<S; mx++) {
+                            const alpha = mask[mRowIdx + mx];
+                            if (alpha === 0) continue;
+                            
+                            const pIdx = rowIdx + (startX + mx) * 4;
+                            data[pIdx] = rInt;
+                            data[pIdx+1] = gInt;
+                            data[pIdx+2] = bInt;
+                            data[pIdx+3] = alpha; 
+                        }
+                    }
+                } else {
+                    // Low LOD: fill square
+                    for(let my=0; my<S; my++) {
+                        const rowIdx = (startY + my) * totalW * 4;
+                        for(let mx=0; mx<S; mx++) {
+                            const pIdx = rowIdx + (startX + mx) * 4;
+                            data[pIdx] = rInt;
+                            data[pIdx+1] = gInt;
+                            data[pIdx+2] = bInt;
+                            data[pIdx+3] = 255; 
+                        }
                     }
                 }
             }
