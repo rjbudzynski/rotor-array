@@ -10,6 +10,6 @@ Browser-based port of the Rotor Array simulation.
 
 ## Development
 
-- `deno task dev`: Watch mode.
+- `deno task dev`: Serve with watch rebuilds.
 - `deno task test`: Run tests.
 - `deno task build`: Generates `public/` artifacts (HTML, JS, CSS bundles).

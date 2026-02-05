@@ -46,6 +46,61 @@ Deno.test("Simulation Energy Conservation", () => {
   assertAlmostEquals(initialEnergy, finalEnergy, 1e-2); // Loose check for float
 });
 
+Deno.test("Order parameter for aligned and anti-aligned states", () => {
+  const params: SimulationParams = {
+    lSide: 2,
+    jCoupling: 0.0,
+    mField: 0.0,
+  };
+  const engine = new SimulationEngine(params);
+
+  const thetaAligned = new Float64Array([0, 0, 0, 0]);
+  const omegaZero = new Float64Array(4).fill(0);
+  engine.setState(thetaAligned, omegaZero);
+  const aligned = engine.getOrderParameter();
+  assertAlmostEquals(aligned.r, 1.0, 1e-12);
+  assertAlmostEquals(aligned.meanCos, 1.0, 1e-12);
+  assertAlmostEquals(aligned.meanSin, 0.0, 1e-12);
+
+  const thetaAnti = new Float64Array([0, Math.PI, 0, Math.PI]);
+  engine.setState(thetaAnti, omegaZero);
+  const anti = engine.getOrderParameter();
+  assertAlmostEquals(anti.r, 0.0, 1e-12);
+  assertAlmostEquals(anti.meanCos, 0.0, 1e-12);
+  assertAlmostEquals(anti.meanSin, 0.0, 1e-12);
+});
+
+Deno.test("Hamiltonian reduces to kinetic + field when J=0", () => {
+  const params: SimulationParams = {
+    lSide: 1,
+    jCoupling: 0.0,
+    mField: 2.0,
+  };
+  const engine = new SimulationEngine(params);
+  const theta = new Float64Array([Math.PI / 3]);
+  const omega = new Float64Array([3.0]);
+  engine.setState(theta, omega);
+
+  const expected = 0.5 * 9.0 - 2.0 * Math.cos(Math.PI / 3);
+  assertAlmostEquals(engine.getEnergy(), expected, 1e-12);
+});
+
+Deno.test("Free rotor advances linearly when J=M=0", () => {
+  const params: SimulationParams = {
+    lSide: 1,
+    jCoupling: 0.0,
+    mField: 0.0,
+  };
+  const engine = new SimulationEngine(params);
+  const theta = new Float64Array([0.0]);
+  const omega = new Float64Array([1.0]);
+  engine.setState(theta, omega);
+
+  engine.step(0.1);
+  assertAlmostEquals(engine.theta[0], 0.1, 1e-9);
+  assertAlmostEquals(engine.omega[0], 1.0, 1e-12);
+});
+
 Deno.test("Field Effect", () => {
   const params: SimulationParams = {
     lSide: 4,

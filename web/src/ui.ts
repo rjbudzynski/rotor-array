@@ -78,7 +78,7 @@ export class MeanDirectionVisualizer {
 }
 
 export class ControlPanel {
-  container: HTMLElement;
+  container!: HTMLElement;
 
   // State callbacks
   onLChange?: (l: number) => void;
@@ -94,30 +94,30 @@ export class ControlPanel {
   onStartStop?: (running: boolean) => void;
 
   // UI Elements
-  lInput: HTMLInputElement;
-  presetSelect: HTMLSelectElement;
+  lInput!: HTMLInputElement;
+  presetSelect!: HTMLSelectElement;
 
-  kLabel: HTMLLabelElement;
-  kInput: HTMLInputElement;
-  p2Container: HTMLElement;
-  p2Label: HTMLLabelElement;
-  p2Input: HTMLInputElement;
-  p3Container: HTMLElement;
-  p3Label: HTMLLabelElement;
-  p3Input: HTMLInputElement;
+  kLabel!: HTMLLabelElement;
+  kInput!: HTMLInputElement;
+  p2Container!: HTMLElement;
+  p2Label!: HTMLLabelElement;
+  p2Input!: HTMLInputElement;
+  p3Container!: HTMLElement;
+  p3Label!: HTMLLabelElement;
+  p3Input!: HTMLInputElement;
 
-  jInput: HTMLInputElement;
-  jLabel: HTMLLabelElement;
-  mInput: HTMLInputElement;
-  mLabel: HTMLLabelElement;
-  timeInput: HTMLInputElement;
-  timeLabel: HTMLLabelElement;
-  tempInput: HTMLInputElement;
-  tempLabel: HTMLLabelElement;
+  jInput!: HTMLInputElement;
+  jLabel!: HTMLLabelElement;
+  mInput!: HTMLInputElement;
+  mLabel!: HTMLLabelElement;
+  timeInput!: HTMLInputElement;
+  timeLabel!: HTMLLabelElement;
+  tempInput!: HTMLInputElement;
+  tempLabel!: HTMLLabelElement;
 
-  arrowCheck: HTMLInputElement;
-  startBtn: HTMLButtonElement;
-  resetBtn: HTMLButtonElement;
+  arrowCheck!: HTMLInputElement;
+  startBtn!: HTMLButtonElement;
+  resetBtn!: HTMLButtonElement;
 
   isRunning: boolean = false;
 
@@ -228,7 +228,7 @@ export class ControlPanel {
     arrowDiv.className = "control-group row";
     const aLbl = document.createElement("label");
     aLbl.textContent = "Show Arrows";
-    aLbl.style.marginBottom = "0";
+    if (aLbl.style) aLbl.style.marginBottom = "0";
     this.arrowCheck = document.createElement("input");
     this.arrowCheck.type = "checkbox";
     arrowDiv.appendChild(aLbl);
@@ -238,7 +238,7 @@ export class ControlPanel {
     // Buttons
     const btnRow = document.createElement("div");
     btnRow.className = "row";
-    btnRow.style.marginTop = "10px";
+    if (btnRow.style) btnRow.style.marginTop = "10px";
     this.startBtn = document.createElement("button");
     this.startBtn.textContent = "Start";
     this.resetBtn = document.createElement("button");
@@ -279,11 +279,7 @@ export class ControlPanel {
     });
 
     this.startBtn.addEventListener("click", () => {
-      this.isRunning = !this.isRunning;
-      this.startBtn.textContent = this.isRunning ? "Stop" : "Start";
-      this.startBtn.classList.toggle("active", this.isRunning);
-      this.toggleInputs(!this.isRunning);
-      if (this.onStartStop) this.onStartStop(this.isRunning);
+      this.toggleRunning();
     });
 
     this.resetBtn.addEventListener("click", () => {
@@ -300,7 +296,9 @@ export class ControlPanel {
     // Update labels and visibility
     const showK = name !== "Random Angles" && name !== "Domain Wall" &&
       name !== "Cross Domain";
-    this.kLabel.parentElement!.style.display = showK ? "block" : "none";
+    if (this.kLabel.parentElement?.style) {
+      this.kLabel.parentElement.style.display = showK ? "block" : "none";
+    }
     this.kLabel.textContent = p.kLabel || "Parameter:";
     this.kInput.step = p.kStep.toString();
     // Set default if not set? Or keep current if reasonable?
@@ -313,20 +311,20 @@ export class ControlPanel {
 
     // P2
     if (p.p2Label) {
-      this.p2Container.style.display = "block";
+      if (this.p2Container.style) this.p2Container.style.display = "block";
       this.p2Label.textContent = p.p2Label;
       this.p2Input.step = p.p2Step.toString();
     } else {
-      this.p2Container.style.display = "none";
+      if (this.p2Container.style) this.p2Container.style.display = "none";
     }
 
     // P3
     if (p.p3Label) {
-      this.p3Container.style.display = "block";
+      if (this.p3Container.style) this.p3Container.style.display = "block";
       this.p3Label.textContent = p.p3Label;
       this.p3Input.step = p.p3Step.toString();
     } else {
-      this.p3Container.style.display = "none";
+      if (this.p3Container.style) this.p3Container.style.display = "none";
     }
 
     this.loadPresetDefaults();
@@ -374,6 +372,14 @@ export class ControlPanel {
     }
   }
 
+  toggleRunning() {
+    this.isRunning = !this.isRunning;
+    this.startBtn.textContent = this.isRunning ? "Stop" : "Start";
+    this.startBtn.classList.toggle("active", this.isRunning);
+    this.toggleInputs(!this.isRunning);
+    if (this.onStartStop) this.onStartStop(this.isRunning);
+  }
+
   triggerReset() {
     if (this.onReset) {
       const name = this.presetSelect.value;
@@ -387,7 +393,7 @@ export class ControlPanel {
 }
 
 export class OrderPlot {
-  uplot: uPlot;
+  uplot: { setData: (data: [number[], number[]]) => void };
   data: [number[], number[]];
   private maxPoints = 500;
   private bufferX: number[];
@@ -395,8 +401,21 @@ export class OrderPlot {
   private start = 0;
   private count = 0;
 
-  constructor(containerId: string) {
+  constructor(
+    containerId: string,
+    uplotCtor: new (
+      opts: unknown,
+      data: [number[], number[]],
+      el: HTMLElement,
+    ) => { setData: (data: [number[], number[]]) => void } =
+      uPlot as unknown as new (
+        opts: unknown,
+        data: [number[], number[]],
+        el: HTMLElement,
+      ) => { setData: (data: [number[], number[]]) => void },
+  ) {
     const el = document.getElementById(containerId);
+    if (!el) throw new Error("Plot container not found");
     this.data = [[], []]; // time, r
     this.bufferX = new Array(this.maxPoints);
     this.bufferY = new Array(this.maxPoints);
@@ -425,7 +444,7 @@ export class OrderPlot {
       ],
     };
 
-    this.uplot = new uPlot(opts, this.data, el);
+    this.uplot = new uplotCtor(opts, this.data, el);
   }
 
   push(t: number, r: number) {
@@ -459,7 +478,7 @@ export class OrderPlot {
 }
 
 export class ColorBarVisualizer {
-  container: HTMLElement;
+  container?: HTMLElement;
 
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
@@ -469,6 +488,7 @@ export class ColorBarVisualizer {
   }
 
   render() {
+    if (!this.container) return;
     this.container.innerHTML = `
             <div style="font-size: 10px; color: #aaa; margin-bottom: 2px;">Angle (0 → 2π)</div>
             <div id="angle-bar" style="height: 12px; width: 100%; margin-bottom: 8px; border-radius: 2px;"></div>
@@ -491,7 +511,7 @@ export class ColorBarVisualizer {
       angleGrad += `, rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     }
     angleGrad += ")";
-    angleBar.style.background = angleGrad;
+    if (angleBar.style) angleBar.style.background = angleGrad;
 
     // Energy gradient
     let energyGrad = "linear-gradient(to right";
@@ -504,6 +524,6 @@ export class ColorBarVisualizer {
       energyGrad += `, rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     }
     energyGrad += ")";
-    energyBar.style.background = energyGrad;
+    if (energyBar.style) energyBar.style.background = energyGrad;
   }
 }

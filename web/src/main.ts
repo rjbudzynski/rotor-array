@@ -23,6 +23,29 @@ let engine: SimulationEngine | null = null;
 let running = false;
 let timeScale = 1.0;
 
+const buildEngineFromControls = () => {
+  const l = parseInt(controls.lInput.value) || 20;
+
+  const params = {
+    lSide: l,
+    jCoupling: parseFloat(controls.jInput.value) / 100,
+    mField: parseFloat(controls.mInput.value) / 100,
+  };
+
+  engine = new SimulationEngine(params);
+  const { theta, omega } = generateInitialState(
+    l,
+    controls.presetSelect.value,
+    parseFloat(controls.kInput.value),
+    parseFloat(controls.p2Input.value),
+    parseFloat(controls.p3Input.value),
+    parseFloat(controls.tempInput.value) / 100,
+  );
+  engine.setState(theta, omega);
+
+  timeScale = parseFloat(controls.timeInput.value) / 100;
+};
+
 let lastFrame = 0;
 const loop = (timestamp: number) => {
   const dt = (timestamp - lastFrame) / 1000;
@@ -48,19 +71,7 @@ const loop = (timestamp: number) => {
 };
 
 controls.onReset = (preset, k, p2, p3, temp) => {
-  const l = parseInt(controls.lInput.value) || 20;
-
-  const params = {
-    lSide: l,
-    jCoupling: parseFloat(controls.jInput.value) / 100,
-    mField: parseFloat(controls.mInput.value) / 100,
-  };
-
-  engine = new SimulationEngine(params);
-  const { theta, omega } = generateInitialState(l, preset, k, p2, p3, temp);
-  engine.setState(theta, omega);
-
-  timeScale = parseFloat(controls.timeInput.value) / 100;
+  buildEngineFromControls();
 
   plot.reset();
   running = false;
@@ -78,6 +89,10 @@ controls.onParamChange = (j, m, t) => {
 };
 
 controls.onStartStop = (r) => {
+  if (r && !engine) {
+    buildEngineFromControls();
+    plot.reset();
+  }
   running = r;
 };
 
