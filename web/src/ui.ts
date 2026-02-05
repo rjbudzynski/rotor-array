@@ -168,7 +168,7 @@ export class ControlPanel {
         this.jInput = document.createElement("input");
         this.jInput.type = "range";
         this.jInput.min = "0";
-        this.jInput.max = "500";
+        this.jInput.max = "1000";
         this.jInput.value = "100"; // 1.0
         const jG = group("Coupling (J): 1.00", this.jInput);
         this.jLabel = jG.lbl;
