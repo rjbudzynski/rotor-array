@@ -5093,7 +5093,8 @@ var ColorBarVisualizer = class {
     const energyBar = this.container.querySelector("#energy-bar");
     let angleGrad = "linear-gradient(to right";
     for (let i = 0; i <= 10; i++) {
-      const h = i / 10;
+      const theta = i / 10 * 2 * Math.PI;
+      const h = thetaToHue(theta);
       const rgb = new Uint8ClampedArray(3);
       hsvToRgb(h, 1, 0.8, rgb, 0);
       angleGrad += `, rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
