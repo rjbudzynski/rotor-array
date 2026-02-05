@@ -66,6 +66,15 @@ async function buildCssBundle() {
   console.log("CSS bundle generated.");
 }
 
+async function copyAssets() {
+  await Deno.mkdir("public", { recursive: true });
+  for await (const entry of Deno.readDir("assets")) {
+    if (!entry.isFile) continue;
+    await Deno.copyFile(`assets/${entry.name}`, `public/${entry.name}`);
+  }
+  console.log("Assets copied.");
+}
+
 const ctx = await esbuild.context({
   plugins: [
     ...denoPlugins(),
@@ -75,6 +84,7 @@ const ctx = await esbuild.context({
         build.onEnd(async () => {
           await buildHtml();
           await buildCssBundle();
+          await copyAssets();
         });
       },
     },
