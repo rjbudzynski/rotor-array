@@ -38,7 +38,17 @@ async function buildHtml() {
 }
 
 const ctx = await esbuild.context({
-  plugins: [...denoPlugins()],
+  plugins: [
+    ...denoPlugins(),
+    {
+      name: "html-gen",
+      setup(build) {
+        build.onEnd(async () => {
+          await buildHtml();
+        });
+      },
+    },
+  ],
   entryPoints: ["src/main.ts"],
   outfile: "public/bundle.js",
   bundle: true,
@@ -48,17 +58,9 @@ const ctx = await esbuild.context({
 });
 
 if (watch) {
-  await buildHtml();
   await ctx.watch();
   console.log("Watching...");
-  
-  // Watch for template changes
-  const watcher = Deno.watchFs("index.html.template");
-  for await (const _event of watcher) {
-    await buildHtml();
-  }
 } else {
-  await buildHtml();
   await ctx.rebuild();
   await ctx.dispose();
   console.log("Build complete.");
