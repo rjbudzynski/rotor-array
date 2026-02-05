@@ -3,6 +3,7 @@
     "build": "deno run -A build.ts",
     "build:watch": "deno run -A build.ts --watch",
     "dev": "deno run -A build.ts --watch & deno run -A server.ts",
+    "clean": "rm -rf public",
     "fmt": "deno fmt src test build.ts server.ts",
     "lint": "deno lint src test build.ts server.ts",
     "stress": "deno run -A bench/stress_test.ts",

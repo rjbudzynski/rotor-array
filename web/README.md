@@ -14,3 +14,4 @@ Browser-based port of the Rotor Array simulation.
 - `deno task test`: Run tests.
 - `deno task build`: Generates `public/` artifacts (HTML, JS, CSS bundles).
 - `deno task stress`: Runs headless physics benchmark and reports max lattice sizes for 60/30 Hz.
+- `deno task clean`: Removes generated `public/` artifacts.
