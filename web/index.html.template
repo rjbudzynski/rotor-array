@@ -76,7 +76,7 @@
                 <p><strong>Controls &amp; Monitors</strong></p>
                 <ul>
                     <li><strong>Start/Stop</strong>: Runs or pauses the integration.</li>
-                    <li><strong>Reset</strong>: Restores initial conditions and stops simulation.</li>
+                    <li><strong>Apply</strong>: Applies current settings and restarts the simulation.</li>
                     <li><strong>Order Parameter Plot</strong>: Shows the history of system synchronization.</li>
                 </ul>
 
