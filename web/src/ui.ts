@@ -242,7 +242,7 @@ export class ControlPanel {
     this.startBtn = document.createElement("button");
     this.startBtn.textContent = "Start";
     this.resetBtn = document.createElement("button");
-    this.resetBtn.textContent = "Reset";
+    this.resetBtn.textContent = "Apply";
     btnRow.appendChild(this.startBtn);
     btnRow.appendChild(this.resetBtn);
     this.container.appendChild(btnRow);
