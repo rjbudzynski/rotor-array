@@ -13,3 +13,6 @@ __pycache__/
 
 # Project specific
 /Users/rjb/.gemini/tmp/
+
+# macOS
+.DS_Store

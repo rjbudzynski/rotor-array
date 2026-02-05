@@ -109,7 +109,7 @@ export function generateInitialState(
   k: number,
   p2: number,
   p3: number,
-  temp: number
+  temp: number,
 ): { theta: Float64Array; omega: Float64Array } {
   const n = l * l;
   const theta = new Float64Array(n);

@@ -1,0 +1,212 @@
+body {
+  font-family: sans-serif;
+  background: #222;
+  color: #eee;
+  margin: 0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+#app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+#canvas-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  padding: 20px;
+}
+canvas#sim-canvas {
+  background: #000;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  image-rendering: pixelated;
+}
+#sidebar {
+  width: 340px;
+  padding: 12px;
+  background: #222;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 1px solid #444;
+}
+.control-group {
+  margin-bottom: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #444;
+}
+.control-group:last-child {
+  border-bottom: none;
+}
+label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.8em;
+  color: #ccc;
+}
+input[type="range"] {
+  width: 100%;
+  height: 14px;
+}
+input[type="number"], select {
+  background: #444;
+  color: white;
+  border: 1px solid #555;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+#uplot-chart {
+  height: 150px;
+  width: 100%;
+  background: #111;
+  border: 1px solid #444;
+}
+h1 {
+  font-size: 1em;
+  margin: 0 0 5px 0;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#help-btn {
+  background: #444;
+  border: 1px solid #555;
+  color: #ccc;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 0.8em;
+}
+#help-btn:hover {
+  background: #555;
+  color: #fff;
+}
+
+#help-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+#help-modal {
+  background: #222;
+  padding: 25px;
+  border-radius: 8px;
+  max-width: 650px;
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+  border: 1px solid #444;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  line-height: 1.6;
+}
+#help-modal h2 {
+  margin-top: 0;
+  color: #fff;
+  border-bottom: 1px solid #444;
+  padding-bottom: 8px;
+}
+#help-modal h3 {
+  color: #ddd;
+  margin-bottom: 8px;
+}
+#help-modal p, #help-modal li {
+  color: #ccc;
+  font-size: 0.95em;
+}
+#help-modal ul {
+  padding-left: 20px;
+}
+#close-help {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+#close-help:hover {
+  color: #fff;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 15px;
+  border-top: 1px solid #444;
+  color: #666;
+  font-size: 0.75em;
+  text-align: center;
+}
+.sidebar-footer p {
+  margin: 2px 0;
+}
+
+button {
+  background: #555;
+  color: white;
+  border: 1px solid #666;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 0.85em;
+}
+button:hover {
+  background: #666;
+}
+button.active {
+  background: #d32f2f;
+  border-color: #b71c1c;
+}
+.mean-dir-canvas {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  display: block;
+  background: transparent;
+}
+.value-display {
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #fff;
+}
+.legend {
+  display: flex;
+  gap: 10px;
+  font-size: 0.8em;
+  justify-content: center;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}

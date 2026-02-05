@@ -92,7 +92,7 @@ export class SimulationEngine {
   array: RotorArray;
   theta: Float64Array;
   omega: Float64Array;
-  
+
   // Acceleration buffer
   private _accel: Float64Array;
   // Acceleration dirty flag (if parameters changed)
@@ -114,7 +114,9 @@ export class SimulationEngine {
   }
 
   setState(theta: Float64Array, omega: Float64Array, t: number = 0) {
-    if (theta.length !== this.theta.length || omega.length !== this.omega.length) {
+    if (
+      theta.length !== this.theta.length || omega.length !== this.omega.length
+    ) {
       throw new Error("State array size mismatch");
     }
     this.theta.set(theta);
@@ -152,27 +154,27 @@ export class SimulationEngine {
       // Wrap to [-pi, pi) for numerical stability (optional but good)
       // Standard wrap: ((x + pi) % 2pi) - pi
       // JS % operator can be negative, so be careful.
-      // Actually, simple float drift isn't a huge issue for cos/sin, 
+      // Actually, simple float drift isn't a huge issue for cos/sin,
       // but keeping it bounded is nice.
       // For performance, we might skip this unless necessary, or use a fast wrap.
       // Simulation.py does it.
       let th = this.theta[i];
       if (th > Math.PI || th < -Math.PI) {
-          th = (th + Math.PI) % (2 * Math.PI);
-          if (th < 0) th += 2 * Math.PI;
-          th -= Math.PI;
-          this.theta[i] = th;
+        th = (th + Math.PI) % (2 * Math.PI);
+        if (th < 0) th += 2 * Math.PI;
+        th -= Math.PI;
+        this.theta[i] = th;
       }
     }
 
     // 3. v(t + dt) = v(t + dt/2) + a(t + dt) * dt/2
     // Calc new acceleration
     this.array.getAcceleration(this.theta, this._accel);
-    
+
     for (let i = 0; i < N; i++) {
       this.omega[i] += this._accel[i] * halfDt;
     }
-    
+
     this.t += dt;
   }
 
@@ -181,7 +183,10 @@ export class SimulationEngine {
       const J = Math.abs(this.params.jCoupling);
       const M = Math.abs(this.params.mField);
       const omegaMax = Math.sqrt(8.0 * J + M + 1e-9);
-      this.substeps = Math.max(1, Math.ceil((dt * omegaMax) / this.stabilityFactor));
+      this.substeps = Math.max(
+        1,
+        Math.ceil((dt * omegaMax) / this.stabilityFactor),
+      );
     }
 
     const subDt = dt / this.substeps;
@@ -198,13 +203,13 @@ export class SimulationEngine {
     const N = this.theta.length;
     let sumCos = 0;
     let sumSin = 0;
-    for(let i=0; i<N; i++) {
-        sumCos += Math.cos(this.theta[i]);
-        sumSin += Math.sin(this.theta[i]);
+    for (let i = 0; i < N; i++) {
+      sumCos += Math.cos(this.theta[i]);
+      sumSin += Math.sin(this.theta[i]);
     }
     const meanCos = sumCos / N;
     const meanSin = sumSin / N;
-    const r = Math.sqrt(meanCos*meanCos + meanSin*meanSin);
+    const r = Math.sqrt(meanCos * meanCos + meanSin * meanSin);
     return { r, meanCos, meanSin };
   }
 }
