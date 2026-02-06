@@ -436,7 +436,12 @@ class ControlPanel(QtWidgets.QWidget):
             self.p3_widget.setVisible(False)
 
         # Always show K if it's not the default "Parameter:" or if it's explicitly needed
-        show_k = preset_name not in ["Random Angles", "Domain Wall", "Cross Domain"]
+        show_k = preset_name not in [
+            "Random Angles",
+            "Domain Wall",
+            "Pi/2 Domain Wall",
+            "Cross Domain",
+        ]
         self.k_widget.setVisible(show_k)
 
     def _on_j_changed(self, value: int) -> None:
