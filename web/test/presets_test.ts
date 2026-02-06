@@ -50,6 +50,22 @@ Deno.test("Domain Wall preset produces two distinct regions", () => {
   }
 });
 
+Deno.test("Pi/2 Domain Wall preset produces two distinct regions (+/- PI/2)", () => {
+  const l = 6;
+  const { theta } = generateInitialState(l, "Pi/2 Domain Wall", 0, 0, 0, 0);
+  const half = Math.floor(l / 2);
+  for (let r = 0; r < l; r++) {
+    for (let c = 0; c < l; c++) {
+      const t = theta[r * l + c];
+      if (r < half) {
+        assertAlmostEquals(t, Math.PI / 2, 1e-12);
+      } else {
+        assertAlmostEquals(t, -Math.PI / 2, 1e-12);
+      }
+    }
+  }
+});
+
 Deno.test("Thermalized preset produces non-zero omega variance", () => {
   const { omega } = generateInitialState(10, "Thermalized", 1.0, 0, 0, 0);
   let mean = 0;

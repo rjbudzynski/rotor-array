@@ -55,7 +55,7 @@ def test_preset_change(app, qtbot):
 
 def test_single_kick_preset(app, qtbot):
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(7)
+        app.controls.preset_combo.setCurrentIndex(8)
     app.controls.k_spin.setValue(5.5)
 
     # Peak is at the center

@@ -56,6 +56,7 @@ export const PRESETS: PresetInfo[] = [
     kDefault: 1.0,
   }),
   createPreset({ name: "Domain Wall" }),
+  createPreset({ name: "Pi/2 Domain Wall" }),
   createPreset({
     name: "Vortex Band",
     kLabel: "Wraps (k):",
@@ -143,6 +144,15 @@ export function generateInitialState(
     for (let r = 0; r < l; r++) {
       for (let c = 0; c < l; c++) {
         theta[getIdx(r, c)] = r >= half ? Math.PI : 0;
+      }
+    }
+    // Kick first rotor slightly
+    omega[0] = 1e-6;
+  } else if (presetName === "Pi/2 Domain Wall") {
+    const half = Math.floor(l / 2);
+    for (let r = 0; r < l; r++) {
+      for (let c = 0; c < l; c++) {
+        theta[getIdx(r, c)] = r < half ? Math.PI / 2 : -Math.PI / 2;
       }
     }
     // Kick first rotor slightly

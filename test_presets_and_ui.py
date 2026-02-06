@@ -15,7 +15,7 @@ def app(qtbot):
 def test_vortex_band_preset(app, qtbot):
     # Select Vortex Band
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(3)
+        app.controls.preset_combo.setCurrentIndex(4)
 
     # Defaults: wraps=1, width=1, shift=0
     l_side = app.l_side
@@ -39,7 +39,7 @@ def test_vortex_band_preset(app, qtbot):
 
 def test_cross_domain_preset(app, qtbot):
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(4)
+        app.controls.preset_combo.setCurrentIndex(5)
 
     l_side = app.l_side
     theta = app.engine.theta.reshape(l_side, l_side)
@@ -64,7 +64,7 @@ def test_vortex_pair_preset(app, qtbot):
 
 def test_skyrmion_preset(app, qtbot):
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(6)
+        app.controls.preset_combo.setCurrentIndex(7)
 
     l_side = app.l_side
     theta = app.engine.theta.reshape(l_side, l_side)
@@ -76,7 +76,7 @@ def test_skyrmion_preset(app, qtbot):
 
 def test_thermalized_preset(app, qtbot):
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(8)
+        app.controls.preset_combo.setCurrentIndex(9)
 
     app.controls.temp_slider.setValue(100)  # T=1.0
     # Velocity should be quite high now
