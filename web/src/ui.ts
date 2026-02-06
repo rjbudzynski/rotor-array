@@ -145,7 +145,7 @@ export class ControlPanel {
     this.lInput = document.createElement("input");
     this.lInput.type = "number";
     this.lInput.min = "2";
-    this.lInput.max = "200";
+    this.lInput.max = "500";
     this.lInput.value = "20";
     this.container.appendChild(group("Lattice Side (L)", this.lInput).div);
 

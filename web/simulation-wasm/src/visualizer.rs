@@ -63,13 +63,13 @@ impl Visualizer {
         let s = self.upsample;
         let total_w = l * s;
         
-        // Fast clear background to black opaque
-        for chunk in self.rgba_buffer.chunks_exact_mut(4) {
-            chunk[0] = 0;
-            chunk[1] = 0;
-            chunk[2] = 0;
-            chunk[3] = 255;
-        }
+        // Use u32 pointer for 4x faster clear [0, 0, 0, 255]
+        // 0xFF000000 is Big Endian for [0, 0, 0, 255] but on Little Endian WASM 
+        // we likely want 0xFF000000 (A B G R). 
+        let data32: &mut [u32] = unsafe {
+            std::slice::from_raw_parts_mut(self.rgba_buffer.as_mut_ptr() as *mut u32, total_w * total_w)
+        };
+        data32.fill(0xFF000000);
 
         let has_mask = !self.mask.is_empty();
 
@@ -79,23 +79,27 @@ impl Visualizer {
                 let idx = r * l + c;
                 let start_x = c * s;
                 
-                let (r_int, g_int, b_int) = self.lut.get_rgb(theta[idx], omega[idx] * omega[idx]);
+                let (r_int, g_int, b_int) = unsafe {
+                    self.lut.get_rgb(*theta.get_unchecked(idx), *omega.get_unchecked(idx) * *omega.get_unchecked(idx))
+                };
                 
                 if has_mask {
                     for my in 0..s {
                         let row_idx = (start_y + my) * total_w * 4;
                         let m_row_idx = my * s;
                         for mx in 0..s {
-                            let alpha = self.mask[m_row_idx + mx];
+                            let alpha = unsafe { *self.mask.get_unchecked(m_row_idx + mx) };
                             if alpha == 0 {
                                 continue;
                             }
                             
                             let p_idx = row_idx + (start_x + mx) * 4;
-                            self.rgba_buffer[p_idx] = r_int;
-                            self.rgba_buffer[p_idx + 1] = g_int;
-                            self.rgba_buffer[p_idx + 2] = b_int;
-                            self.rgba_buffer[p_idx + 3] = alpha;
+                            unsafe {
+                                *self.rgba_buffer.get_unchecked_mut(p_idx) = r_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 1) = g_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 2) = b_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 3) = alpha;
+                            }
                         }
                     }
                 } else {
@@ -103,10 +107,12 @@ impl Visualizer {
                         let row_idx = (start_y + my) * total_w * 4;
                         for mx in 0..s {
                             let p_idx = row_idx + (start_x + mx) * 4;
-                            self.rgba_buffer[p_idx] = r_int;
-                            self.rgba_buffer[p_idx + 1] = g_int;
-                            self.rgba_buffer[p_idx + 2] = b_int;
-                            self.rgba_buffer[p_idx + 3] = 255;
+                            unsafe {
+                                *self.rgba_buffer.get_unchecked_mut(p_idx) = r_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 1) = g_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 2) = b_int;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx + 3) = 255;
+                            }
                         }
                     }
                 }

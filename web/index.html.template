@@ -37,7 +37,7 @@
             </div>
         </div>
     </div>
-    <script type="module" src="bundle.js"></script>
+    <script type="module" src="main.js"></script>
 
     <div id="help-overlay">
         <div id="help-modal">
