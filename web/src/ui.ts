@@ -295,6 +295,7 @@ export class ControlPanel {
     const p = getPresetByName(name);
     // Update labels and visibility
     const showK = name !== "Random Angles" && name !== "Domain Wall" &&
+      name !== "Pi/2 Domain Wall" &&
       name !== "Cross Domain";
     if (this.kLabel.parentElement?.style) {
       this.kLabel.parentElement.style.display = showK ? "block" : "none";
