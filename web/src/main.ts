@@ -8,7 +8,9 @@ import { RotorArrayVisualizer } from "./visualizer.ts";
 import { generateInitialState } from "./presets.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
-const mdCanvas = document.getElementById("mean-dir-canvas") as HTMLCanvasElement;
+const mdCanvas = document.getElementById(
+  "mean-dir-canvas",
+) as HTMLCanvasElement;
 
 const visualizer = new RotorArrayVisualizer(canvas);
 const mdViz = new MeanDirectionVisualizer(mdCanvas);
@@ -50,7 +52,7 @@ worker.onmessage = (e) => {
   }
 };
 
-controls.onReset = async (preset, k, p2, p3, temp) => {
+controls.onReset = (preset, k, p2, p3, temp) => {
   const lSide = parseInt(controls.lInput.value) || 20;
   const { theta, omega } = generateInitialState(lSide, preset, k, p2, p3, temp);
 

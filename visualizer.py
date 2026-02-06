@@ -1,7 +1,8 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6 import QtCore, QtGui
-from colors import theta_to_hue, omega_to_value, hsv_to_rgb_array
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+from colors import hsv_to_rgb_array, omega_to_value, theta_to_hue
 
 
 class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
@@ -39,11 +40,11 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             min(RotorArrayVisualizer.MAX_UPSAMPLE, int(640 / l_side)),
         )
 
-    def __init__(self, l_side: int, parent=None):
+    def __init__(self, l_side: int, parent: QtWidgets.QWidget | None = None):
         self.l_side = l_side
         self.n_rotors = l_side**2
         self.show_arrows = False
-        self._theta_cache = None  # Cache theta for arrow rendering
+        self._theta_cache: np.ndarray | None = None  # Cache theta for arrow rendering
         self._upsample = self._calculate_upsample(l_side)
         super().__init__(parent=parent)
 
@@ -101,8 +102,8 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             return
 
         s = self._upsample
-        l = self.l_side
-        total_size = l * s
+        l_side = self.l_side
+        total_size = l_side * s
 
         # Create a QImage to draw into. QImage uses row-major (y, x) order.
         image = QtGui.QImage(
@@ -126,33 +127,21 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         arrow_length = 0.45 * s
 
         # Reshape theta to 2D grid (row-major)
-        theta_2d = theta.reshape(l, l)
+        theta_2d = theta.reshape(l_side, l_side)
 
         # Draw arrows for each rotor
-        for row in range(l):
-            for col in range(l):
+        for row in range(l_side):
+            for col in range(l_side):
                 angle = theta_2d[row, col]
 
                 # Disc center in pixel coordinates
-                # row=0 is bottom in pyqtgraph, which maps to row=0 in our buffer
-                # because of the subsequent transpose and pyqtgraph's Y-up axis.
                 center_x = col * s + center_offset
                 center_y = row * s + center_offset
 
-                # Arrow endpoint calculation
-                # θ=0 → Down in pyqtgraph (smaller y_pg)
-                # θ=π/2 → Right in pyqtgraph (larger x_pg)
-                # In QImage: y increases DOWN.
-                # Since QImage(row, col) -> ImageItem(col, row),
-                # increasing row in QImage increases y in pyqtgraph.
-                # So to move DOWN in pyqtgraph, we move UP in QImage (smaller row).
                 end_x = center_x + arrow_length * np.sin(angle)
                 end_y = center_y - arrow_length * np.cos(angle)
 
-                painter.drawLine(
-                    QtCore.QPointF(center_x, center_y),
-                    QtCore.QPointF(end_x, end_y)
-                )
+                painter.drawLine(QtCore.QPointF(center_x, center_y), QtCore.QPointF(end_x, end_y))
 
         painter.end()
 
@@ -174,7 +163,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         tr.scale(1.0 / s, 1.0 / s)
         self.arrows_img.setTransform(tr)
 
-    def set_l_side(self, l_side: int):
+    def set_l_side(self, l_side: int) -> None:
         """Update the lattice side length and rebuild the grid/mask.
 
         Also recalculates the adaptive upsample rate based on new L value.
@@ -203,8 +192,6 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         mask = (mask_f * 255).astype(np.uint8)
 
         # Tile it to the full lattice size.
-        # We want (X_up, Y_up) to match ImageItem's 'col-major' order.
-        # np.tile(A, (rows, cols))
         self.alpha_mask = np.tile(mask, (l_side, l_side))
 
         # Pre-allocate RGBA buffer (X, Y, 4)
@@ -248,7 +235,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             self._theta_cache = None
             self.arrows_img.clear()
 
-    def update_rotors(self, theta: np.ndarray, omega: np.ndarray):
+    def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
         """
         Update the visualization with new rotor angles and velocities.
         """
@@ -280,4 +267,3 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self._theta_cache = theta.copy()
         if self.show_arrows:
             self._render_arrows(theta)
-

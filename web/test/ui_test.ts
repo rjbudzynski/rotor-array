@@ -1,7 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { DOMParser } from "deno_dom";
 import { ControlPanel, OrderPlot } from "../src/ui.ts";
-import type uPlot from "uplot";
 
 function setupDom(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html");

@@ -29,7 +29,7 @@ async function runWasmPack() {
   await copy(
     "simulation-wasm/pkg/simulation_wasm_bg.wasm",
     "public/simulation_wasm_bg.wasm",
-    { overwrite: true }
+    { overwrite: true },
   );
 
   console.log("wasm-pack complete.");

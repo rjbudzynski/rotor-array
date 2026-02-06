@@ -1,8 +1,10 @@
-import pyqtgraph as pg
+from collections.abc import Callable
+
 import numpy as np
-from PyQt6 import QtWidgets, QtCore, QtGui
-from typing import Callable
-from colors import theta_to_hue, hsv_to_rgb_array, omega_to_value
+import pyqtgraph as pg
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+from colors import hsv_to_rgb_array, omega_to_value, theta_to_hue
 from presets import PRESETS, get_preset_by_name
 
 
@@ -11,7 +13,7 @@ class HelpDialog(QtWidgets.QDialog):
     A custom dialog to display help content with rich text/Markdown support.
     """
 
-    def __init__(self, content: str, parent=None):
+    def __init__(self, content: str, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setWindowTitle("Rotor Chain Simulation Help")
         self.resize(600, 500)
@@ -35,7 +37,7 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
     Slit length: Order parameter r.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setFixedHeight(180)
         # Set background to None for transparency
@@ -102,7 +104,7 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         self.plot.setXRange(-1 - pad, 1 + pad)
         self.plot.setYRange(-1 - pad, 1 + pad)
 
-    def update_state(self, r: float, mean_cos: float, mean_sin: float):
+    def update_state(self, r: float, mean_cos: float, mean_sin: float) -> None:
         """Update the visualizer with new order parameter data."""
         # Mean direction vector: (mean_cos, mean_sin)
         # To rotate theta=0 to point down:
@@ -117,7 +119,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
     Uses native QPainter to ensure visibility and performance.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setFixedHeight(70)
 
@@ -144,12 +146,12 @@ class ColorBarVisualizer(QtWidgets.QWidget):
         layout.addWidget(self.energy_bar)
 
     class _GradientWidget(QtWidgets.QWidget):
-        def __init__(self, color_func):
+        def __init__(self, color_func: Callable[[int], list[QtGui.QColor]]):
             super().__init__()
             self.setFixedHeight(12)
             self.color_func = color_func
 
-        def paintEvent(self, event):
+        def paintEvent(self, event: QtGui.QPaintEvent) -> None:  # noqa: N802
             painter = QtGui.QPainter(self)
             width = self.width()
             height = self.height()
@@ -160,21 +162,21 @@ class ColorBarVisualizer(QtWidgets.QWidget):
                 painter.setPen(colors[x])
                 painter.drawLine(x, 0, x, height)
 
-    def _get_angle_colors(self, n):
+    def _get_angle_colors(self, n: int) -> list[QtGui.QColor]:
         hues = np.linspace(0, 1, n)
         colors = []
         for h in hues:
-            colors.append(QtGui.QColor.fromHsvF(h, 1.0, 0.8))
+            colors.append(QtGui.QColor.fromHsvF(float(h), 1.0, 0.8))
         return colors
 
-    def _get_energy_colors(self, n):
+    def _get_energy_colors(self, n: int) -> list[QtGui.QColor]:
         # Map [0, 5] energy range to colors
         energies = np.linspace(0, 5, n)
         vals = omega_to_value(energies)
         colors = []
         for v in vals:
             # Using red as the representative color for energy ramp
-            colors.append(QtGui.QColor.fromHsvF(0, 1.0, v))
+            colors.append(QtGui.QColor.fromHsvF(0, 1.0, float(v)))
         return colors
 
 
@@ -183,7 +185,7 @@ class InfoPanel(QtWidgets.QWidget):
     Informative panel showing monitoring data and legends.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setMinimumWidth(220)
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -232,7 +234,7 @@ class InfoPanel(QtWidgets.QWidget):
 
         main_layout.addStretch()
 
-    def update_order_plot(self, times: list[float], values: list[float]):
+    def update_order_plot(self, times: list[float], values: list[float]) -> None:
         """Update the order parameter plot with new data."""
         self.order_curve.setData(times, values)
         if times:
@@ -250,10 +252,10 @@ class ControlPanel(QtWidgets.QWidget):
     Control panel for the Rotor Array simulation.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setMinimumWidth(250)
-        self.layout = QtWidgets.QVBoxLayout(self)
+        self.main_layout = QtWidgets.QVBoxLayout(self)
 
         # Header with Help
         header_layout = QtWidgets.QHBoxLayout()
@@ -262,26 +264,25 @@ class ControlPanel(QtWidgets.QWidget):
         self.help_button.setToolTip("Show Help")
         header_layout.addStretch()
         header_layout.addWidget(self.help_button)
-        self.layout.addLayout(header_layout)
+        self.main_layout.addLayout(header_layout)
 
         # Lattice side control
         self.l_label = QtWidgets.QLabel("Lattice Side (L):")
         self.l_spin = QtWidgets.QSpinBox()
         self.l_spin.setRange(2, 200)
         self.l_spin.setValue(20)
-        self.layout.addWidget(self.l_label)
-        self.layout.addWidget(self.l_spin)
+        self.main_layout.addWidget(self.l_label)
+        self.main_layout.addWidget(self.l_spin)
 
-        self.layout.addSpacing(10)
+        self.main_layout.addSpacing(10)
 
         # Initial Conditions Preset
         self.preset_label = QtWidgets.QLabel("Initial Condition Preset:")
         self.preset_combo = QtWidgets.QComboBox()
         for p in PRESETS:
             self.preset_combo.addItem(p.name)
-        self.layout.addWidget(self.preset_label)
-        self.layout.addWidget(self.preset_combo)
-
+        self.main_layout.addWidget(self.preset_label)
+        self.main_layout.addWidget(self.preset_combo)
 
         # Parameter 1 (k)
         self.k_widget = QtWidgets.QWidget()
@@ -294,7 +295,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.k_spin.setValue(1.0)
         self.k_layout.addWidget(self.k_label)
         self.k_layout.addWidget(self.k_spin)
-        self.layout.addWidget(self.k_widget)
+        self.main_layout.addWidget(self.k_widget)
 
         # Parameter 2 (p2)
         self.p2_widget = QtWidgets.QWidget()
@@ -307,7 +308,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.p2_spin.setValue(1.0)
         self.p2_layout.addWidget(self.p2_label)
         self.p2_layout.addWidget(self.p2_spin)
-        self.layout.addWidget(self.p2_widget)
+        self.main_layout.addWidget(self.p2_widget)
 
         # Parameter 3 (p3)
         self.p3_widget = QtWidgets.QWidget()
@@ -320,7 +321,7 @@ class ControlPanel(QtWidgets.QWidget):
         self.p3_spin.setValue(0.0)
         self.p3_layout.addWidget(self.p3_label)
         self.p3_layout.addWidget(self.p3_spin)
-        self.layout.addWidget(self.p3_widget)
+        self.main_layout.addWidget(self.p3_widget)
 
         # Initialize visibility
         self.k_widget.setVisible(False)
@@ -330,7 +331,7 @@ class ControlPanel(QtWidgets.QWidget):
         # Connect internal visibility toggle
         self.preset_combo.currentIndexChanged.connect(self._handle_preset_ui_change)
 
-        self.layout.addSpacing(10)
+        self.main_layout.addSpacing(10)
 
         # J coupling slider
         self.j_label = QtWidgets.QLabel("Coupling (J): 1.00")
@@ -338,8 +339,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.j_slider.setRange(0, 500)  # 0.0 to 5.0
         self.j_slider.setValue(100)
         self.j_slider.valueChanged.connect(self._on_j_changed)
-        self.layout.addWidget(self.j_label)
-        self.layout.addWidget(self.j_slider)
+        self.main_layout.addWidget(self.j_label)
+        self.main_layout.addWidget(self.j_slider)
 
         # M field slider
         self.m_label = QtWidgets.QLabel("Field (M): 0.00")
@@ -347,8 +348,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.m_slider.setRange(0, 1000)  # 0.0 to 10.0
         self.m_slider.setValue(0)
         self.m_slider.valueChanged.connect(self._on_m_changed)
-        self.layout.addWidget(self.m_label)
-        self.layout.addWidget(self.m_slider)
+        self.main_layout.addWidget(self.m_label)
+        self.main_layout.addWidget(self.m_slider)
 
         # Time Scale slider
         self.time_label = QtWidgets.QLabel("Time Scale: 1.0x")
@@ -356,8 +357,8 @@ class ControlPanel(QtWidgets.QWidget):
         self.time_slider.setRange(10, 500)  # 0.1x to 5.0x
         self.time_slider.setValue(100)
         self.time_slider.valueChanged.connect(self._on_time_changed)
-        self.layout.addWidget(self.time_label)
-        self.layout.addWidget(self.time_slider)
+        self.main_layout.addWidget(self.time_label)
+        self.main_layout.addWidget(self.time_slider)
 
         # Initial Temperature (Noise) slider
         self.temp_label = QtWidgets.QLabel("Initial Temp (T): 0.00")
@@ -365,27 +366,27 @@ class ControlPanel(QtWidgets.QWidget):
         self.temp_slider.setRange(0, 200)  # 0.0 to 2.0
         self.temp_slider.setValue(0)
         self.temp_slider.valueChanged.connect(self._on_temp_changed)
-        self.layout.addWidget(self.temp_label)
-        self.layout.addWidget(self.temp_slider)
+        self.main_layout.addWidget(self.temp_label)
+        self.main_layout.addWidget(self.temp_slider)
 
         # Direction Arrows toggle
         self.arrows_checkbox = QtWidgets.QCheckBox("Show Direction Arrows")
         self.arrows_checkbox.setToolTip(
             "Show arrows indicating rotor angle (auto-disabled when L>60)"
         )
-        self.layout.addWidget(self.arrows_checkbox)
+        self.main_layout.addWidget(self.arrows_checkbox)
 
-        self.layout.addSpacing(20)
+        self.main_layout.addSpacing(20)
 
         # Buttons
         self.start_stop_button = QtWidgets.QPushButton("Start")
         self.start_stop_button.setCheckable(True)
-        self.layout.addWidget(self.start_stop_button)
+        self.main_layout.addWidget(self.start_stop_button)
 
         self.reset_button = QtWidgets.QPushButton("Reset")
-        self.layout.addWidget(self.reset_button)
+        self.main_layout.addWidget(self.reset_button)
 
-        self.layout.addStretch()
+        self.main_layout.addStretch()
 
         # Callbacks for external connection
         self.j_callback: Callable[[float], None] = lambda x: None
@@ -396,28 +397,28 @@ class ControlPanel(QtWidgets.QWidget):
         # Connect arrows checkbox
         self.arrows_checkbox.stateChanged.connect(self._on_arrows_changed)
 
-    def _handle_preset_ui_change(self, index: int):
+    def _handle_preset_ui_change(self, index: int) -> None:
         preset_name = self.preset_combo.currentText()
         p = get_preset_by_name(preset_name)
-        l = self.l_spin.value()
+        l_side = self.l_spin.value()
 
         # Update K control
         self.k_label.setText(p.k_label)
         self.k_spin.setDecimals(p.k_decimals)
         self.k_spin.setSingleStep(p.k_step)
         self.k_spin.setRange(p.k_min, p.k_max)
-        
-        k_val = p.k_default(l) if callable(p.k_default) else p.k_default
-        self.k_spin.setValue(k_val)
-        
+
+        k_val = p.k_default(l_side) if callable(p.k_default) else p.k_default
+        self.k_spin.setValue(float(k_val))
+
         # Update P2 control
         if p.p2_label:
             self.p2_label.setText(p.p2_label)
             self.p2_spin.setDecimals(p.p2_decimals)
             self.p2_spin.setSingleStep(p.p2_step)
             self.p2_spin.setRange(p.p2_min, p.p2_max)
-            p2_val = p.p2_default(l) if callable(p.p2_default) else p.p2_default
-            self.p2_spin.setValue(p2_val)
+            p2_val = p.p2_default(l_side) if callable(p.p2_default) else p.p2_default
+            self.p2_spin.setValue(float(p2_val))
             self.p2_widget.setVisible(True)
         else:
             self.p2_widget.setVisible(False)
@@ -428,47 +429,45 @@ class ControlPanel(QtWidgets.QWidget):
             self.p3_spin.setDecimals(p.p3_decimals)
             self.p3_spin.setSingleStep(p.p3_step)
             self.p3_spin.setRange(p.p3_min, p.p3_max)
-            p3_val = p.p3_default(l) if callable(p.p3_default) else p.p3_default
-            self.p3_spin.setValue(p3_val)
+            p3_val = p.p3_default(l_side) if callable(p.p3_default) else p.p3_default
+            self.p3_spin.setValue(float(p3_val))
             self.p3_widget.setVisible(True)
         else:
             self.p3_widget.setVisible(False)
 
         # Always show K if it's not the default "Parameter:" or if it's explicitly needed
-        # Actually, let's show K for everything except "Random Angles", "Domain Wall", "Cross Domain"
         show_k = preset_name not in ["Random Angles", "Domain Wall", "Cross Domain"]
         self.k_widget.setVisible(show_k)
 
-
-    def _on_j_changed(self, value: int):
+    def _on_j_changed(self, value: int) -> None:
         j = value / 100.0
         self.j_label.setText(f"Coupling (J): {j:.2f}")
         self.j_callback(j)
 
-    def _on_m_changed(self, value: int):
+    def _on_m_changed(self, value: int) -> None:
         m = value / 100.0
         self.m_label.setText(f"Field (M): {m:.2f}")
         self.m_callback(m)
 
-    def _on_time_changed(self, value: int):
+    def _on_time_changed(self, value: int) -> None:
         scale = value / 100.0
         self.time_label.setText(f"Time Scale: {scale:.1f}x")
         self.time_callback(scale)
 
-    def _on_temp_changed(self, value: int):
+    def _on_temp_changed(self, value: int) -> None:
         t = value / 100.0
         self.temp_label.setText(f"Initial Temp (T): {t:.2f}")
 
-    def set_j_callback(self, callback: Callable[[float], None]):
+    def set_j_callback(self, callback: Callable[[float], None]) -> None:
         self.j_callback = callback
 
-    def set_m_callback(self, callback: Callable[[float], None]):
+    def set_m_callback(self, callback: Callable[[float], None]) -> None:
         self.m_callback = callback
 
-    def set_time_callback(self, callback: Callable[[float], None]):
+    def set_time_callback(self, callback: Callable[[float], None]) -> None:
         self.time_callback = callback
 
-    def set_arrows_callback(self, callback: Callable[[bool], None]):
+    def set_arrows_callback(self, callback: Callable[[bool], None]) -> None:
         """Set callback for arrow visibility toggle.
 
         Args:
@@ -476,11 +475,11 @@ class ControlPanel(QtWidgets.QWidget):
         """
         self.arrows_callback = callback
 
-    def _on_arrows_changed(self, state: int):
+    def _on_arrows_changed(self, state: int) -> None:
         """Handle arrow checkbox state change."""
         self.arrows_callback(state == QtCore.Qt.CheckState.Checked.value)
 
-    def set_arrows_checked(self, checked: bool):
+    def set_arrows_checked(self, checked: bool) -> None:
         """Programmatically set the arrows checkbox state.
 
         Args:
@@ -488,7 +487,7 @@ class ControlPanel(QtWidgets.QWidget):
         """
         self.arrows_checkbox.setChecked(checked)
 
-    def set_simulation_running(self, running: bool):
+    def set_simulation_running(self, running: bool) -> None:
         """Enable or disable controls that should not be changed during simulation."""
         self.l_spin.setEnabled(not running)
         self.preset_combo.setEnabled(not running)

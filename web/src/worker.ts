@@ -1,8 +1,12 @@
-import init, { WasmSimulationEngine } from "../simulation-wasm/pkg/simulation_wasm.js";
+import init, {
+  WasmSimulationEngine,
+  WasmVisualizer,
+} from "../simulation-wasm/pkg/simulation_wasm.js";
 
 let engine: WasmSimulationEngine | null = null;
-let wasmExports: any = null;
-let currentLSide: number = 0;
+let visualizer: WasmVisualizer | null = null;
+let wasmExports: unknown = null;
+let currentLSide = 0;
 
 let running = false;
 let timeScale = 1.0;
@@ -20,25 +24,26 @@ self.onmessage = async (e) => {
       self.postMessage({ type: "initialized" });
       break;
 
-    case "reset":
-      const { lSide, jCoupling, mField, theta, omega } = payload;
+    case "reset": {
+      const { lSide, jCoupling, mField, theta, omega, upsample } = payload;
       currentLSide = lSide;
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);
       engine.set_state(theta, omega, 0);
-      
+      visualizer = new WasmVisualizer(lSide, upsample);
+
       lastFrame = performance.now();
       accumulator = 0;
       running = false;
-      
-      // Post initial frame immediately
+
       renderFrame();
       break;
+    }
 
     case "start":
       if (!running) {
-          running = true;
-          lastFrame = performance.now();
-          loop();
+        running = true;
+        lastFrame = performance.now();
+        loop();
       }
       break;
 
@@ -54,41 +59,58 @@ self.onmessage = async (e) => {
 };
 
 function renderFrame() {
-  if (!engine || !wasmExports) return;
+  if (!engine || !visualizer || !wasmExports) return;
 
   const N = currentLSide * currentLSide;
-  
-  const thetaPtr = engine.get_theta_ptr();
-  const omegaPtr = engine.get_omega_ptr();
-  
-  const thetaView = new Float64Array(wasmExports.memory.buffer, thetaPtr, N);
-  const omegaView = new Float64Array(wasmExports.memory.buffer, omegaPtr, N);
-  
-  const theta = thetaView.slice();
-  const omega = omegaView.slice();
+  visualizer.update(engine.get_theta_ptr(), engine.get_omega_ptr(), N);
+
+  // deno-lint-ignore no-explicit-any
+  const memory = (wasmExports as any).memory.buffer;
+  const rgbaPtr = visualizer.get_rgba_ptr();
+  const rgbaSize = visualizer.get_rgba_size();
+  const rgbaView = new Uint8ClampedArray(
+    memory,
+    rgbaPtr,
+    rgbaSize,
+  );
+
+  const buffer = rgbaView.slice().buffer;
+
+  const theta = new Float64Array(
+    memory,
+    engine.get_theta_ptr(),
+    N,
+  ).slice();
+  const omega = new Float64Array(
+    memory,
+    engine.get_omega_ptr(),
+    N,
+  ).slice();
 
   const op = {
-      r: engine.get_order_parameter_r(),
-      meanCos: engine.get_order_parameter_mean_cos(),
-      meanSin: engine.get_order_parameter_mean_sin(),
-      t: engine.get_t()
+    r: engine.get_order_parameter_r(),
+    meanCos: engine.get_order_parameter_mean_cos(),
+    meanSin: engine.get_order_parameter_mean_sin(),
+    t: engine.get_t(),
   };
 
   self.postMessage({
     type: "frame",
     payload: {
+      buffer,
       theta: theta.buffer,
       omega: omega.buffer,
       orderParameter: op,
-      lSide: currentLSide
-    }
-  }, [theta.buffer, omega.buffer]);
-  
+      lSide: currentLSide,
+      upsample: visualizer.upsample,
+    },
+  }, [buffer, theta.buffer, omega.buffer]);
+
   lastEmit = performance.now();
 }
 
 function loop() {
-  if (!running || !engine || !wasmExports) return;
+  if (!running || !engine || !visualizer || !wasmExports) return;
 
   const timestamp = performance.now();
   const frameDt = (timestamp - lastFrame) / 1000;
@@ -101,13 +123,12 @@ function loop() {
     accumulator -= SIM_DT;
   }
 
-  // Throttle visual updates to ~60Hz
   const now = performance.now();
   if (now - lastEmit >= 16.6) {
-      renderFrame();
+    renderFrame();
   }
 
   if (running) {
-      setTimeout(loop, 0);
+    setTimeout(loop, 0);
   }
 }

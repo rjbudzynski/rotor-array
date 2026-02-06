@@ -1,4 +1,6 @@
-import init, { WasmSimulationEngine } from "../simulation-wasm/pkg/simulation_wasm.js";
+import init, {
+  WasmSimulationEngine,
+} from "../simulation-wasm/pkg/simulation_wasm.js";
 
 export interface SimulationParams {
   lSide: number;
@@ -15,8 +17,8 @@ export interface OrderParameter {
 export class SimulationEngine {
   params: SimulationParams;
   wasm: WasmSimulationEngine | null = null;
-  wasm_exports: any = null;
-  
+  wasm_exports: unknown = null;
+
   // These will point to WASM memory
   private _theta: Float64Array | null = null;
   private _omega: Float64Array | null = null;
@@ -35,18 +37,19 @@ export class SimulationEngine {
     this.wasm = new WasmSimulationEngine(
       this.params.lSide,
       this.params.jCoupling,
-      this.params.mField
+      this.params.mField,
     );
   }
 
   // Helper to get views of WASM memory
   private updateViews() {
     if (!this.wasm || !this.wasm_exports) return;
-    const memory = this.wasm_exports.memory.buffer;
+    // deno-lint-ignore no-explicit-any
+    const memory = (this.wasm_exports as any).memory.buffer;
     const thetaPtr = this.wasm.get_theta_ptr();
     const omegaPtr = this.wasm.get_omega_ptr();
     const N = this.params.lSide * this.params.lSide;
-    
+
     this._theta = new Float64Array(memory, thetaPtr, N);
     this._omega = new Float64Array(memory, omegaPtr, N);
   }
@@ -79,11 +82,11 @@ export class SimulationEngine {
 
   step(dt: number) {
     if (!this.wasm) return;
-    
+
     // We let WASM handle sub-stepping too for maximum speed
     // Actually, I didn't implement adaptive substepping IN the WASM verlet_step,
     // but I did in WASM step().
-    
+
     this.wasm.step(dt);
     this.t = this.wasm.get_t();
   }

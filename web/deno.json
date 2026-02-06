@@ -7,7 +7,7 @@
     "fmt": "deno fmt src test build.ts server.ts",
     "lint": "deno lint src test build.ts server.ts",
     "stress": "deno run -A bench/stress_test.ts",
-    "test": "deno test"
+    "test": "deno test --allow-read"
   },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "deno.ns"]

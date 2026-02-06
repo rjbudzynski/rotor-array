@@ -1,13 +1,15 @@
-import sys
-import os
 import logging
-import numpy as np
+import os
+import sys
 from collections import deque
-from PyQt6 import QtWidgets, QtCore, QtGui
-from simulation import SimulationEngine, SimulationParams
-from visualizer import RotorArrayVisualizer
-from ui import ControlPanel, InfoPanel
+
+import numpy as np
+from PyQt6 import QtCore, QtGui, QtWidgets
+
 from presets import generate_initial_state
+from simulation import SimulationEngine, SimulationParams
+from ui import ControlPanel, InfoPanel
+from visualizer import RotorArrayVisualizer
 
 # Configure logging
 logging.basicConfig(
@@ -61,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Connect controls
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
-        
+
         # Connect other controls that trigger re-initialization
         reinit_triggers = [
             self.controls.preset_combo.currentIndexChanged,
@@ -106,24 +108,22 @@ class MainWindow(QtWidgets.QMainWindow):
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
-    def showEvent(self, event):
+    def showEvent(self, event):  # noqa: N802
         super().showEvent(event)
         # Re-sync the visualizer once layout is likely stable
         self.visualizer.set_l_side(self.l_side)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
 
-
     def get_initial_state(self) -> np.ndarray:
         """Generate initial state based on the selected preset."""
         return generate_initial_state(
-            l=self.l_side,
+            l_side=self.l_side,
             preset_name=self.controls.preset_combo.currentText(),
             k=self.controls.k_spin.value(),
             p2=self.controls.p2_spin.value(),
             p3=self.controls.p3_spin.value(),
             temp=self.controls.temp_slider.value() / 100.0,
         )
-
 
     def reinit_simulation(self, l_side: int):
         """Re-initialize the simulation with a new lattice size or preset."""
@@ -177,6 +177,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_help(self):
         """Display the help dialog with content from HELP.md."""
         import os
+
         from ui import HelpDialog
 
         help_path = os.path.join(os.path.dirname(__file__), "HELP.md")
@@ -186,14 +187,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 logger.error(f"HELP.md not found at: {help_path}")
                 QtWidgets.QMessageBox.critical(self, "Error", f"Help file not found:\n{help_path}")
                 return
-            with open(help_path, "r", encoding="utf-8") as f:
+            with open(help_path, encoding="utf-8") as f:
                 content = f.read()
             logger.info(f"Successfully loaded help file ({len(content)} characters)")
             dialog = HelpDialog(content, self)
             dialog.exec()
         except PermissionError:
             logger.error(f"Permission denied reading HELP.md at: {help_path}")
-            QtWidgets.QMessageBox.critical(self, "Error", f"Permission denied reading help file.")
+            QtWidgets.QMessageBox.critical(self, "Error", "Permission denied reading help file.")
         except UnicodeDecodeError as e:
             logger.error(f"Unicode decode error in HELP.md: {e}")
             QtWidgets.QMessageBox.critical(self, "Error", f"Help file has invalid encoding: {e}")
