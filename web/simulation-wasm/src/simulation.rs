@@ -1,5 +1,44 @@
 use std::f64::consts::PI;
 
+pub const TRIG_STEPS: usize = 2048;
+
+pub struct TrigLut {
+    sin_table: [f64; TRIG_STEPS],
+}
+
+impl TrigLut {
+    pub fn new() -> Self {
+        let mut sin_table = [0.0; TRIG_STEPS];
+        for i in 0..TRIG_STEPS {
+            let theta = (i as f64 / TRIG_STEPS as f64) * 2.0 * PI;
+            sin_table[i] = theta.sin();
+        }
+        TrigLut { sin_table }
+    }
+
+    #[inline(always)]
+    pub fn sin(&self, theta: f64) -> f64 {
+        let val = (theta / (2.0 * PI)) * TRIG_STEPS as f64;
+        let i = val.floor();
+        let frac = val - i;
+        let mut i_int = i as isize;
+        
+        let i1 = ((i_int % TRIG_STEPS as isize + TRIG_STEPS as isize) % TRIG_STEPS as isize) as usize;
+        let i2 = (i1 + 1) % TRIG_STEPS;
+
+        unsafe {
+            let y1 = *self.sin_table.get_unchecked(i1);
+            let y2 = *self.sin_table.get_unchecked(i2);
+            y1 + frac * (y2 - y1)
+        }
+    }
+
+    #[inline(always)]
+    pub fn cos(&self, theta: f64) -> f64 {
+        self.sin(theta + PI * 0.5)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct SimulationParams {
     pub l_side: usize,
@@ -15,39 +54,83 @@ impl SimulationParams {
 
 pub struct RotorArray {
     pub params: SimulationParams,
+    pub lut: TrigLut,
+    // Buffer for bond forces to avoid re-calculation and enable vectorization
+    // force_h[i] is the force from i to its right neighbor
+    // force_v[i] is the force from i to its bottom neighbor
+    force_h: Vec<f64>,
+    force_v: Vec<f64>,
 }
 
 impl RotorArray {
     pub fn new(params: SimulationParams) -> Self {
-        RotorArray { params }
+        let n = params.n_rotors();
+        RotorArray { 
+            params,
+            lut: TrigLut::new(),
+            force_h: vec![0.0; n],
+            force_v: vec![0.0; n],
+        }
     }
 
-    pub fn get_acceleration(&self, theta: &[f64], out_accel: &mut [f64]) {
+    pub fn resize(&mut self, n: usize) {
+        self.force_h.resize(n, 0.0);
+        self.force_v.resize(n, 0.0);
+    }
+
+    pub fn get_acceleration(&self, theta: &[f64], out_accel: &mut [f64], force_h: &mut [f64], force_v: &mut [f64]) {
         let l = self.params.l_side;
         let j = self.params.j_coupling;
         let m = self.params.m_field;
+        let n = l * l;
 
+        // 1. Calculate all bond forces (Pass 1)
+        // This loop is perfectly serial and uses the LUT.
+        if j != 0.0 {
+            for row in 0..l {
+                let row_offset = row * l;
+                let next_row_offset = ((row + 1) % l) * l;
+                for col in 0..l {
+                    let idx = row_offset + col;
+                    let right_idx = row_offset + ((col + 1) % l);
+                    let down_idx = next_row_offset + col;
+
+                    unsafe {
+                        let t_i = *theta.get_unchecked(idx);
+                        let t_right = *theta.get_unchecked(right_idx);
+                        let t_down = *theta.get_unchecked(down_idx);
+
+                        *force_h.get_unchecked_mut(idx) = j * self.lut.sin(t_right - t_i);
+                        *force_v.get_unchecked_mut(idx) = j * self.lut.sin(t_down - t_i);
+                    }
+                }
+            }
+        } else {
+            force_h.fill(0.0);
+            force_v.fill(0.0);
+        }
+
+        // 2. Aggregate forces into acceleration (Pass 2)
+        // accel[i] = force_right - force_left + force_down - force_up
+        // This loop is extremely SIMD friendly!
         for row in 0..l {
             let row_offset = row * l;
-            let up_row_offset = ((row + l - 1) % l) * l;
-            let down_row_offset = ((row + 1) % l) * l;
-
+            let prev_row_offset = ((row + l - 1) % l) * l;
             for col in 0..l {
                 let idx = row_offset + col;
-                let theta_i = theta[idx];
-
                 let left_idx = row_offset + ((col + l - 1) % l);
-                let right_idx = row_offset + ((col + 1) % l);
-                let up_idx = up_row_offset + col;
-                let down_idx = down_row_offset + col;
+                let up_idx = prev_row_offset + col;
 
-                let mut force_sum = 0.0;
-                force_sum += (theta[right_idx] - theta_i).sin();
-                force_sum += (theta[left_idx] - theta_i).sin();
-                force_sum += (theta[down_idx] - theta_i).sin();
-                force_sum += (theta[up_idx] - theta_i).sin();
-
-                out_accel[idx] = (j * force_sum) - (m * theta_i.sin());
+                unsafe {
+                    let mut acc = *force_h.get_unchecked(idx) - *force_h.get_unchecked(left_idx)
+                                + *force_v.get_unchecked(idx) - *force_v.get_unchecked(up_idx);
+                    
+                    if m != 0.0 {
+                        acc -= m * self.lut.sin(*theta.get_unchecked(idx));
+                    }
+                    
+                    *out_accel.get_unchecked_mut(idx) = acc;
+                }
             }
         }
     }
@@ -59,14 +142,14 @@ impl RotorArray {
         let n = self.params.n_rotors();
 
         let mut kinetic = 0.0;
-        let mut potential = 0.0;
         let mut field = 0.0;
 
         for i in 0..n {
             kinetic += 0.5 * omega[i] * omega[i];
-            field -= m * theta[i].cos();
+            field -= m * self.lut.cos(theta[i]);
         }
 
+        let mut potential = 0.0;
         for row in 0..l {
             let row_offset = row * l;
             let down_row_offset = ((row + 1) % l) * l;
@@ -77,8 +160,10 @@ impl RotorArray {
                 let down_idx = down_row_offset + col;
 
                 let t = theta[idx];
-                potential += j * (1.0 - (t - theta[right_idx]).cos());
-                potential += j * (1.0 - (t - theta[down_idx]).cos());
+                unsafe {
+                    potential += j * (1.0 - self.lut.cos(*theta.get_unchecked(right_idx) - t));
+                    potential += j * (1.0 - self.lut.cos(*theta.get_unchecked(down_idx) - t));
+                }
             }
         }
 
@@ -92,6 +177,8 @@ pub struct SimulationEngine {
     pub theta: Vec<f64>,
     pub omega: Vec<f64>,
     accel: Vec<f64>,
+    force_h: Vec<f64>,
+    force_v: Vec<f64>,
     accel_dirty: bool,
     pub t: f64,
     pub adaptive_substepping: bool,
@@ -108,6 +195,8 @@ impl SimulationEngine {
             theta: vec![0.0; n],
             omega: vec![0.0; n],
             accel: vec![0.0; n],
+            force_h: vec![0.0; n],
+            force_v: vec![0.0; n],
             accel_dirty: true,
             t: 0.0,
             adaptive_substepping: true,
@@ -117,6 +206,15 @@ impl SimulationEngine {
     }
 
     pub fn set_state(&mut self, theta: &[f64], omega: &[f64], t: f64) {
+        let n = theta.len();
+        if self.theta.len() != n {
+            self.theta.resize(n, 0.0);
+            self.omega.resize(n, 0.0);
+            self.accel.resize(n, 0.0);
+            self.force_h.resize(n, 0.0);
+            self.force_v.resize(n, 0.0);
+            self.array.resize(n);
+        }
         self.theta.copy_from_slice(theta);
         self.omega.copy_from_slice(omega);
         self.t = t;
@@ -139,33 +237,37 @@ impl SimulationEngine {
         let half_dt = dt * 0.5;
 
         if self.accel_dirty {
-            self.array.get_acceleration(&self.theta, &mut self.accel);
+            self.array.get_acceleration(&self.theta, &mut self.accel, &mut self.force_h, &mut self.force_v);
             self.accel_dirty = false;
         }
 
         for i in 0..n {
-            self.omega[i] += self.accel[i] * half_dt;
-        }
-
-        for i in 0..n {
-            self.theta[i] += self.omega[i] * dt;
-            
-            // Wrap to [-pi, pi)
-            let mut th = self.theta[i];
-            if th > PI || th < -PI {
-                th = (th + PI) % (2.0 * PI);
-                if th < 0.0 {
-                    th += 2.0 * PI;
-                }
-                th -= PI;
-                self.theta[i] = th;
+            unsafe {
+                *self.omega.get_unchecked_mut(i) += self.accel.get_unchecked(i) * half_dt;
             }
         }
 
-        self.array.get_acceleration(&self.theta, &mut self.accel);
+        for i in 0..n {
+            unsafe {
+                let mut th = *self.theta.get_unchecked(i) + self.omega.get_unchecked(i) * dt;
+                
+                if th > PI || th < -PI {
+                    th = (th + PI) % (2.0 * PI);
+                    if th < 0.0 {
+                        th += 2.0 * PI;
+                    }
+                    th -= PI;
+                }
+                *self.theta.get_unchecked_mut(i) = th;
+            }
+        }
+
+        self.array.get_acceleration(&self.theta, &mut self.accel, &mut self.force_h, &mut self.force_v);
 
         for i in 0..n {
-            self.omega[i] += self.accel[i] * half_dt;
+            unsafe {
+                *self.omega.get_unchecked_mut(i) += self.accel.get_unchecked(i) * half_dt;
+            }
         }
 
         self.t += dt;
@@ -197,8 +299,8 @@ impl SimulationEngine {
         let mut sum_cos = 0.0;
         let mut sum_sin = 0.0;
         for &th in &self.theta {
-            sum_cos += th.cos();
-            sum_sin += th.sin();
+            sum_cos += self.array.lut.cos(th);
+            sum_sin += self.array.lut.sin(th);
         }
         let mean_cos = sum_cos / n as f64;
         let mean_sin = sum_sin / n as f64;

@@ -53,7 +53,7 @@ pub fn theta_to_hue(theta: f64) -> f64 {
 pub fn omega_to_value(omega_sq: f64) -> f64 {
     let val_min = 0.4;
     let val_max = 0.8;
-    let energy_factor = (omega_sq / 5.0).tanh();
+    let energy_factor = (omega_sq / 5.0).tanh(); // tanh is still okay here, not in tightest loop
     val_min + (val_max - val_min) * energy_factor
 }
 

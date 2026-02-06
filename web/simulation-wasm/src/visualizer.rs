@@ -36,13 +36,13 @@ impl Visualizer {
         let s = self.upsample;
         if s >= 4 {
             self.mask = vec![0; s * s];
-            let center = (s as f32 - 1.0) / 2.0;
-            let radius = 0.45 * s as f32;
+            let center = (s as f64 - 1.0) / 2.0;
+            let radius = 0.45 * s as f64;
             
             for y in 0..s {
                 for x in 0..s {
-                    let dx = x as f32 - center;
-                    let dy = y as f32 - center;
+                    let dx = x as f64 - center;
+                    let dy = y as f64 - center;
                     let dist = (dx * dx + dy * dy).sqrt();
                     let mut a = 0u8;
                     if dist < radius - 0.5 {
@@ -64,10 +64,6 @@ impl Visualizer {
         let total_w = l * s;
         
         // Fast clear background to black opaque
-        // Rust's slice::fill is fast.
-        // We want [0, 0, 0, 255] for each pixel.
-        // Using chunks_exact_mut(4) might be slower than filling with a pattern if possible,
-        // but let's do it cleanly first.
         for chunk in self.rgba_buffer.chunks_exact_mut(4) {
             chunk[0] = 0;
             chunk[1] = 0;

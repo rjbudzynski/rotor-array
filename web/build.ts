@@ -15,6 +15,7 @@ async function runWasmPack() {
     cwd: path.join(Deno.cwd(), "simulation-wasm"),
     env: {
       PATH: `${Deno.env.get("HOME")}/.cargo/bin:${Deno.env.get("PATH")}`,
+      RUSTFLAGS: "-C target-feature=+simd128",
     },
   });
   const { success, stderr } = await command.output();
