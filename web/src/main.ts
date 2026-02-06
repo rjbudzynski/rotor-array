@@ -1,11 +1,10 @@
-import { SimulationEngine } from "./simulation.ts";
-import { RotorArrayVisualizer } from "./visualizer.ts";
 import {
+  ColorBarVisualizer,
   ControlPanel,
   MeanDirectionVisualizer,
   OrderPlot,
-  ColorBarVisualizer,
 } from "./ui.ts";
+import { RotorArrayVisualizer } from "./visualizer.ts";
 import { generateInitialState } from "./presets.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -17,81 +16,73 @@ const plot = new OrderPlot("uplot-chart");
 const controls = new ControlPanel("controls-container");
 new ColorBarVisualizer("color-bar-container");
 
-let engine: SimulationEngine | null = null;
-let running = false;
-let timeScale = 1.0;
+const worker = new Worker(new URL("./worker.js", import.meta.url), {
+  type: "module",
+});
+worker.postMessage({ type: "init" });
 
-let lastFrame = 0;
-const loop = (timestamp: number) => {
-  const dt = (timestamp - lastFrame) / 1000;
-  lastFrame = timestamp;
+let lastUiUpdate = 0;
 
-  const safeDt = Math.min(dt, 0.1);
+worker.onmessage = (e) => {
+  const { type, payload } = e.data;
 
-  if (engine && engine.wasm) {
-    if (running) {
-      engine.step(safeDt * timeScale);
+  if (type === "frame") {
+    const { theta: thetaBuf, omega: omegaBuf, orderParameter, lSide } = payload;
 
-      const op = engine.getOrderParameter();
-      plot.push(engine.t, op.r);
-      mdViz.update(op.r, op.meanCos, op.meanSin);
+    // Fast TypedArray views of transferable buffers
+    const theta = new Float64Array(thetaBuf);
+    const omega = new Float64Array(omegaBuf);
+
+    // Sync visualizer state and render
+    visualizer.setLSide(lSide);
+    visualizer.update(theta, omega, controls.arrowCheck.checked);
+
+    const now = performance.now();
+    if (now - lastUiUpdate > 100) {
+      plot.push(orderParameter.t, orderParameter.r);
+      mdViz.update(
+        orderParameter.r,
+        orderParameter.meanCos,
+        orderParameter.meanSin,
+      );
+      lastUiUpdate = now;
     }
-
-    // Handle resizing and rendering
-    visualizer.setLSide(engine.params.lSide);
-    visualizer.update(
-      engine.wasm.get_theta_ptr(),
-      engine.wasm.get_omega_ptr(),
-      engine.theta,
-      controls.arrowCheck.checked
-    );
   }
-
-  requestAnimationFrame(loop);
 };
 
 controls.onReset = async (preset, k, p2, p3, temp) => {
-  const l = parseInt(controls.lInput.value) || 20;
+  const lSide = parseInt(controls.lInput.value) || 20;
+  const { theta, omega } = generateInitialState(lSide, preset, k, p2, p3, temp);
 
-  const params = {
-    lSide: l,
-    jCoupling: parseFloat(controls.jInput.value) / 100,
-    mField: parseFloat(controls.mInput.value) / 100,
-  };
+  // Sync visualizer immediately to prevent black screen or jump
+  visualizer.setLSide(lSide);
 
-  engine = new SimulationEngine(params);
-  await engine.initialize();
-  await visualizer.initialize(l, visualizer.upsample || 1);
-
-  const { theta, omega } = generateInitialState(l, preset, k, p2, p3, temp);
-  engine.setState(theta, omega);
-
-  timeScale = parseFloat(controls.timeInput.value) / 100;
+  worker.postMessage({
+    type: "reset",
+    payload: {
+      lSide,
+      jCoupling: parseFloat(controls.jInput.value) / 100,
+      mField: parseFloat(controls.mInput.value) / 100,
+      theta,
+      omega,
+    },
+  });
 
   plot.reset();
-  running = false;
   controls.isRunning = false;
   controls.startBtn.textContent = "Start";
   controls.startBtn.classList.remove("active");
   controls.toggleInputs(true);
 };
 
-// Check if controls.mField is correct
-// In previous ui.ts it was mInput. 
-// I'll check ui.ts.
-
 controls.onParamChange = (j, m, t) => {
-  timeScale = t;
-  if (engine) {
-    engine.updateParams(j, m);
-  }
+  worker.postMessage({ type: "updateParams", payload: { j, m, t } });
 };
 
-controls.onStartStop = (r) => {
-  running = r;
+controls.onStartStop = (running) => {
+  worker.postMessage({ type: running ? "start" : "stop" });
 };
 
-// Help Modal Logic
 const helpBtn = document.getElementById("help-btn");
 const helpOverlay = document.getElementById("help-overlay");
 const closeHelp = document.getElementById("close-help");
@@ -110,10 +101,6 @@ helpOverlay?.addEventListener("click", (e) => {
   }
 });
 
-// Start loop
-requestAnimationFrame(loop);
-
-// Initial Trigger to load default state
 setTimeout(() => {
   controls.triggerReset();
-}, 100);
+}, 200);
