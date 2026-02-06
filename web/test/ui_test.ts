@@ -61,33 +61,55 @@ Deno.test("ControlPanel reset emits parsed values", () => {
   assertEquals(capturedValue.temp, 0.5);
 });
 
-Deno.test("OrderPlot ring buffer caps at max points", () => {
+Deno.test("OrderPlot prunes data and sets scale for sliding window", () => {
   setupDom(`<div id="uplot-chart"></div>`);
   const el = document.getElementById("uplot-chart") as HTMLElement;
   // deno-lint-ignore no-explicit-any
   (el as any).clientWidth = 300;
+
+  let lastScale: { min: number; max: number } | null = null;
 
   class StubPlot {
     // deno-lint-ignore no-explicit-any
     constructor(_opts: any, _data: any, _el: any) {}
     // deno-lint-ignore no-explicit-any
     setData(_data: any) {}
+    setScale(_key: string, opts: { min: number; max: number }) {
+      lastScale = opts;
+    }
   }
 
   const plot = new OrderPlot(
     "uplot-chart",
-    StubPlot as unknown as new (
-      opts: unknown,
-      data: [number[], number[]],
-      el: HTMLElement,
-    ) => { setData: (data: [number[], number[]]) => void },
+    // deno-lint-ignore no-explicit-any
+    StubPlot as any,
   );
-  for (let i = 0; i < 700; i++) {
+
+  // 1. Initial state
+  assertEquals(plot.data[0].length, 0);
+
+  // 2. Push data within first 10s
+  for (let i = 0; i <= 5; i++) {
     plot.push(i, i * 0.1);
   }
+  assertEquals(plot.data[0].length, 6);
+  assertEquals(plot.data[0][0], 0);
+  assertEquals(plot.data[0][5], 5);
+  assertEquals(lastScale, { min: 0, max: 10 });
 
-  assertEquals(plot.data[0].length, 500);
-  assertEquals(plot.data[1].length, 500);
-  assertEquals(plot.data[0][0], 200);
-  assertEquals(plot.data[0][plot.data[0].length - 1], 699);
+  // 3. Push data crossing 10s
+  plot.push(15, 0.5);
+  // cutoff = 15 - 10 = 5. Data [0, 1, 2, 3, 4, 5, 15].
+  // Pruning logic: while (this.data[0][0] < cutoff) shift().
+  // 0 < 5 (true) -> shift
+  // 1 < 5 (true) -> shift
+  // 2 < 5 (true) -> shift
+  // 3 < 5 (true) -> shift
+  // 4 < 5 (true) -> shift
+  // 5 < 5 (false) -> stop
+  // Remaining: [5, 15]
+  assertEquals(plot.data[0].length, 2);
+  assertEquals(plot.data[0][0], 5);
+  assertEquals(plot.data[0][1], 15);
+  assertEquals(lastScale, { min: 5, max: 15 });
 });

@@ -393,13 +393,12 @@ export class ControlPanel {
 }
 
 export class OrderPlot {
-  uplot: { setData: (data: [number[], number[]]) => void };
+  uplot: {
+    setData: (data: [number[], number[]]) => void;
+    setScale: (key: string, opts: { min: number; max: number }) => void;
+  };
   data: [number[], number[]];
-  private maxPoints = 500;
-  private bufferX: number[];
-  private bufferY: number[];
-  private start = 0;
-  private count = 0;
+  private windowSeconds = 10;
 
   constructor(
     containerId: string,
@@ -407,18 +406,15 @@ export class OrderPlot {
       opts: unknown,
       data: [number[], number[]],
       el: HTMLElement,
-    ) => { setData: (data: [number[], number[]]) => void } =
-      uPlot as unknown as new (
-        opts: unknown,
-        data: [number[], number[]],
-        el: HTMLElement,
-      ) => { setData: (data: [number[], number[]]) => void },
+    ) => {
+      setData: (data: [number[], number[]]) => void;
+      setScale: (key: string, opts: { min: number; max: number }) => void;
+    } = uPlot as // deno-lint-ignore no-explicit-any
+    any,
   ) {
     const el = document.getElementById(containerId);
     if (!el) throw new Error("Plot container not found");
     this.data = [[], []]; // time, r
-    this.bufferX = new Array(this.maxPoints);
-    this.bufferY = new Array(this.maxPoints);
 
     const opts = {
       width: el?.clientWidth || 300,
@@ -448,32 +444,30 @@ export class OrderPlot {
   }
 
   push(t: number, r: number) {
-    const idx = (this.start + this.count) % this.maxPoints;
-    this.bufferX[idx] = t;
-    this.bufferY[idx] = r;
-    if (this.count < this.maxPoints) {
-      this.count += 1;
-    } else {
-      this.start = (this.start + 1) % this.maxPoints;
+    this.data[0].push(t);
+    this.data[1].push(r);
+
+    // Prune data older than 10s
+    const cutoff = t - this.windowSeconds;
+    while (this.data[0].length > 0 && this.data[0][0] < cutoff) {
+      this.data[0].shift();
+      this.data[1].shift();
     }
 
-    const xs: number[] = new Array(this.count);
-    const ys: number[] = new Array(this.count);
-    for (let i = 0; i < this.count; i++) {
-      const bIdx = (this.start + i) % this.maxPoints;
-      xs[i] = this.bufferX[bIdx];
-      ys[i] = this.bufferY[bIdx];
-    }
-
-    this.data = [xs, ys];
     this.uplot.setData(this.data);
+
+    // Sliding window logic: [0, 10] or [t-10, t]
+    if (t > this.windowSeconds) {
+      this.uplot.setScale("x", { min: t - this.windowSeconds, max: t });
+    } else {
+      this.uplot.setScale("x", { min: 0, max: this.windowSeconds });
+    }
   }
 
   reset() {
     this.data = [[], []];
-    this.start = 0;
-    this.count = 0;
     this.uplot.setData(this.data);
+    this.uplot.setScale("x", { min: 0, max: this.windowSeconds });
   }
 }
 
