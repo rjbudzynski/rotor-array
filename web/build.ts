@@ -2,9 +2,38 @@ import * as esbuild from "esbuild";
 import { parseArgs } from "@std/cli/parse-args";
 import { denoPlugins } from "esbuild-plugin-deno-loader";
 import katex from "katex";
+import * as path from "@std/path";
+import { copy } from "@std/fs";
 
 const args = parseArgs(Deno.args);
 const watch = args.watch;
+
+async function runWasmPack() {
+  console.log("Running wasm-pack...");
+  const command = new Deno.Command("wasm-pack", {
+    args: ["build", "--target", "web"],
+    cwd: path.join(Deno.cwd(), "simulation-wasm"),
+    env: {
+      PATH: `${Deno.env.get("HOME")}/.cargo/bin:${Deno.env.get("PATH")}`,
+    },
+  });
+  const { success, stderr } = await command.output();
+  if (!success) {
+    console.error("wasm-pack failed:");
+    console.error(new TextDecoder().decode(stderr));
+    return false;
+  }
+
+  // Copy WASM file to public
+  await copy(
+    "simulation-wasm/pkg/simulation_wasm_bg.wasm",
+    "public/simulation_wasm_bg.wasm",
+    { overwrite: true }
+  );
+
+  console.log("wasm-pack complete.");
+  return true;
+}
 
 function minifyHtml(html: string): string {
   return html
@@ -68,19 +97,30 @@ async function buildCssBundle() {
 
 async function copyAssets() {
   await Deno.mkdir("public", { recursive: true });
-  for await (const entry of Deno.readDir("assets")) {
-    if (!entry.isFile) continue;
-    await Deno.copyFile(`assets/${entry.name}`, `public/${entry.name}`);
+  try {
+    for await (const entry of Deno.readDir("assets")) {
+      if (!entry.isFile) continue;
+      await Deno.copyFile(`assets/${entry.name}`, `public/${entry.name}`);
+    }
+    console.log("Assets copied.");
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) {
+      console.log("No assets directory found, skipping.");
+    } else {
+      throw e;
+    }
   }
-  console.log("Assets copied.");
 }
 
 const ctx = await esbuild.context({
   plugins: [
     ...denoPlugins(),
     {
-      name: "html-gen",
+      name: "wasm-and-html",
       setup(build) {
+        build.onStart(async () => {
+          await runWasmPack();
+        });
         build.onEnd(async () => {
           await buildHtml();
           await buildCssBundle();

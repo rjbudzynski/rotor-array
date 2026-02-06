@@ -1,17 +1,15 @@
 import { SimulationEngine } from "./simulation.ts";
 import { RotorArrayVisualizer } from "./visualizer.ts";
 import {
-  ColorBarVisualizer,
   ControlPanel,
   MeanDirectionVisualizer,
   OrderPlot,
+  ColorBarVisualizer,
 } from "./ui.ts";
 import { generateInitialState } from "./presets.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
-const mdCanvas = document.getElementById(
-  "mean-dir-canvas",
-) as HTMLCanvasElement;
+const mdCanvas = document.getElementById("mean-dir-canvas") as HTMLCanvasElement;
 
 const visualizer = new RotorArrayVisualizer(canvas);
 const mdViz = new MeanDirectionVisualizer(mdCanvas);
@@ -23,29 +21,6 @@ let engine: SimulationEngine | null = null;
 let running = false;
 let timeScale = 1.0;
 
-const buildEngineFromControls = () => {
-  const l = parseInt(controls.lInput.value) || 20;
-
-  const params = {
-    lSide: l,
-    jCoupling: parseFloat(controls.jInput.value) / 100,
-    mField: parseFloat(controls.mInput.value) / 100,
-  };
-
-  engine = new SimulationEngine(params);
-  const { theta, omega } = generateInitialState(
-    l,
-    controls.presetSelect.value,
-    parseFloat(controls.kInput.value),
-    parseFloat(controls.p2Input.value),
-    parseFloat(controls.p3Input.value),
-    parseFloat(controls.tempInput.value) / 100,
-  );
-  engine.setState(theta, omega);
-
-  timeScale = parseFloat(controls.timeInput.value) / 100;
-};
-
 let lastFrame = 0;
 const loop = (timestamp: number) => {
   const dt = (timestamp - lastFrame) / 1000;
@@ -53,7 +28,7 @@ const loop = (timestamp: number) => {
 
   const safeDt = Math.min(dt, 0.1);
 
-  if (engine) {
+  if (engine && engine.wasm) {
     if (running) {
       engine.step(safeDt * timeScale);
 
@@ -64,14 +39,34 @@ const loop = (timestamp: number) => {
 
     // Handle resizing and rendering
     visualizer.setLSide(engine.params.lSide);
-    visualizer.update(engine.theta, engine.omega, controls.arrowCheck.checked);
+    visualizer.update(
+      engine.wasm.get_theta_ptr(),
+      engine.wasm.get_omega_ptr(),
+      engine.theta,
+      controls.arrowCheck.checked
+    );
   }
 
   requestAnimationFrame(loop);
 };
 
-controls.onReset = (preset, k, p2, p3, temp) => {
-  buildEngineFromControls();
+controls.onReset = async (preset, k, p2, p3, temp) => {
+  const l = parseInt(controls.lInput.value) || 20;
+
+  const params = {
+    lSide: l,
+    jCoupling: parseFloat(controls.jInput.value) / 100,
+    mField: parseFloat(controls.mInput.value) / 100,
+  };
+
+  engine = new SimulationEngine(params);
+  await engine.initialize();
+  await visualizer.initialize(l, visualizer.upsample || 1);
+
+  const { theta, omega } = generateInitialState(l, preset, k, p2, p3, temp);
+  engine.setState(theta, omega);
+
+  timeScale = parseFloat(controls.timeInput.value) / 100;
 
   plot.reset();
   running = false;
@@ -81,6 +76,10 @@ controls.onReset = (preset, k, p2, p3, temp) => {
   controls.toggleInputs(true);
 };
 
+// Check if controls.mField is correct
+// In previous ui.ts it was mInput. 
+// I'll check ui.ts.
+
 controls.onParamChange = (j, m, t) => {
   timeScale = t;
   if (engine) {
@@ -89,15 +88,8 @@ controls.onParamChange = (j, m, t) => {
 };
 
 controls.onStartStop = (r) => {
-  if (r && !engine) {
-    buildEngineFromControls();
-    plot.reset();
-  }
   running = r;
 };
-
-// Start loop
-requestAnimationFrame(loop);
 
 // Help Modal Logic
 const helpBtn = document.getElementById("help-btn");
@@ -118,8 +110,10 @@ helpOverlay?.addEventListener("click", (e) => {
   }
 });
 
+// Start loop
+requestAnimationFrame(loop);
+
 // Initial Trigger to load default state
-// We wrap in setTimeout to ensure UI is fully rendered/sized
 setTimeout(() => {
   controls.triggerReset();
 }, 100);

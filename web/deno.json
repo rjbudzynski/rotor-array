@@ -20,6 +20,8 @@
     "@std/cli": "jsr:@std/cli@0.224.0",
     "deno_dom": "https://deno.land/x/deno_dom@v0.1.43/deno-dom-wasm.ts",
     "uplot": "npm:uplot@1.6.30",
-    "katex": "npm:katex@0.16.11"
+    "katex": "npm:katex@0.16.11",
+    "@std/path": "jsr:@std/path@1.0.8",
+    "@std/fs": "jsr:@std/fs@1.0.11"
   }
 }
