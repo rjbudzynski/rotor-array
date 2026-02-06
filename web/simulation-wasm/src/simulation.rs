@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-pub const TRIG_STEPS: usize = 2048;
+pub const TRIG_STEPS: usize = 8192;
 
 pub struct TrigLut {
     sin_table: [f64; TRIG_STEPS],
@@ -21,7 +21,7 @@ impl TrigLut {
         let val = (theta / (2.0 * PI)) * TRIG_STEPS as f64;
         let i = val.floor();
         let frac = val - i;
-        let mut i_int = i as isize;
+        let i_int = i as isize;
         
         let i1 = ((i_int % TRIG_STEPS as isize + TRIG_STEPS as isize) % TRIG_STEPS as isize) as usize;
         let i2 = (i1 + 1) % TRIG_STEPS;
@@ -82,7 +82,7 @@ impl RotorArray {
         let l = self.params.l_side;
         let j = self.params.j_coupling;
         let m = self.params.m_field;
-        let n = l * l;
+        let _n = l * l;
 
         // 1. Calculate all bond forces (Pass 1)
         // This loop is perfectly serial and uses the LUT.
@@ -306,5 +306,70 @@ impl SimulationEngine {
         let mean_sin = sum_sin / n as f64;
         let r = (mean_cos * mean_cos + mean_sin * mean_sin).sqrt();
         (r, mean_cos, mean_sin)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_energy_conservation() {
+        let params = SimulationParams {
+            l_side: 4,
+            j_coupling: 1.0,
+            m_field: 0.5,
+        };
+        let mut engine = SimulationEngine::new(params);
+        
+        let n = params.n_rotors();
+        let theta = vec![0.1; n];
+        let omega = vec![0.0; n];
+        engine.set_state(&theta, &omega, 0.0);
+        
+        let initial_energy = engine.get_energy();
+        for _ in 0..100 {
+            engine.step(0.01);
+        }
+        let final_energy = engine.get_energy();
+        
+        let rel_error = (final_energy - initial_energy).abs() / initial_energy.abs();
+        assert!(rel_error < 1e-6, "Energy drift too high: {}", rel_error);
+    }
+
+    #[test]
+    fn test_hamiltonian_reduction() {
+        let params = SimulationParams {
+            l_side: 1,
+            j_coupling: 0.0,
+            m_field: 2.0,
+        };
+        let engine = SimulationEngine::new(params);
+        let theta = vec![PI / 3.0];
+        let omega = vec![3.0];
+        
+        let energy = engine.array.hamiltonian(&theta, &omega);
+        let expected = 0.5 * 9.0 - 2.0 * (PI / 3.0).cos();
+        assert!((energy - expected).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_order_parameter() {
+        let params = SimulationParams {
+            l_side: 2,
+            j_coupling: 0.0,
+            m_field: 0.0,
+        };
+        let mut engine = SimulationEngine::new(params);
+        
+        // Aligned
+        engine.set_state(&vec![0.0; 4], &vec![0.0; 4], 0.0);
+        let (r, _, _) = engine.get_order_parameter();
+        assert!((r - 1.0).abs() < 1e-12);
+        
+        // Anti-aligned
+        engine.set_state(&vec![0.0, PI, 0.0, PI], &vec![0.0; 4], 0.0);
+        let (r, _, _) = engine.get_order_parameter();
+        assert!(r < 1e-12);
     }
 }
