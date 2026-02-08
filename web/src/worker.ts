@@ -24,16 +24,30 @@ let lastFrame = 0;
 let accumulator = 0;
 let lastEmit = 0;
 
+let initPromise: Promise<WasmExports> | null = null;
+
+function ensureInit(): Promise<WasmExports> {
+  if (wasmExports) return Promise.resolve(wasmExports);
+  if (!initPromise) {
+    initPromise = init().then((exports) => {
+      wasmExports = exports as WasmExports;
+      return wasmExports;
+    });
+  }
+  return initPromise;
+}
+
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
 
   switch (type) {
     case "init":
-      wasmExports = await init() as WasmExports;
+      await ensureInit();
       self.postMessage({ type: "initialized" });
       break;
 
     case "reset": {
+      await ensureInit();
       const { lSide, jCoupling, mField, theta, omega, upsample } = payload;
       currentLSide = lSide;
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);

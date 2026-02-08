@@ -63,7 +63,7 @@ Deno.test("Worker reset message includes all required parameters", () => {
     textBaseline: "",
   });
 
-  const canvas = canvasEl as unknown as HTMLCanvasElement;
+  const _canvas = canvasEl as unknown as HTMLCanvasElement;
 
   // Simple visualizer mock that captures upsample logic
   let capturedUpsample = 0;
@@ -210,7 +210,7 @@ Deno.test("setLSide must be called before accessing upsample", () => {
     quadraticCurveTo: () => {},
   });
 
-  const canvas = canvasEl as unknown as HTMLCanvasElement;
+  const _canvas = canvasEl as unknown as HTMLCanvasElement;
 
   // Track the sequence of operations
   let setLSideCalled = false;

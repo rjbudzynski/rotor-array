@@ -58,6 +58,7 @@ worker.onmessage = (e) => {
     // Draw ImageBitmap directly (WASM-rendered visualization)
     // ImageBitmap is transferred, not a Promise
     ctx.drawImage(imageBitmap, 0, 0);
+    imageBitmap.close();
 
     // Draw arrows if enabled and disks are large enough
     if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
