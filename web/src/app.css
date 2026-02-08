@@ -49,6 +49,11 @@ label {
   font-size: 0.8em;
   color: #ccc;
 }
+label.label-compact {
+  font-size: 0.8em;
+  color: #ccc;
+  margin-bottom: 2px;
+}
 input[type="range"] {
   width: 100%;
   height: 14px;
@@ -193,6 +198,13 @@ button.active {
   font-family: monospace;
   font-size: 0.9em;
   color: #fff;
+}
+.value-display-compact {
+  font-size: 0.8em;
+  color: #ccc;
+}
+.value-label {
+  color: #ccc;
 }
 .legend {
   display: flex;

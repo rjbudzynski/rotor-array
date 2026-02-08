@@ -25,6 +25,16 @@
 
             <div class="control-group" id="color-bar-container">
             </div>
+
+            <div class="control-group">
+                <div class="value-display value-display-compact">
+                    <span class="value-label">Energy (per rotor):</span>
+                    <span id="energy-per-node-value">—</span>
+                    <span class="value-sep"> | </span>
+                    <span>dE/E0:</span>
+                    <span id="energy-rel-dev-value">—</span>
+                </div>
+            </div>
             
             <div class="control-group">
                 <label>Order Parameter (r)</label>

@@ -23,6 +23,8 @@ let timeScale = 1.0;
 let lastFrame = 0;
 let accumulator = 0;
 let lastEmit = 0;
+let lastEnergyEmit = 0;
+let initialEnergyPerNode = 0;
 
 let initPromise: Promise<WasmExports> | null = null;
 
@@ -57,6 +59,10 @@ self.onmessage = async (e) => {
       lastFrame = performance.now();
       accumulator = 0;
       running = false;
+      lastEnergyEmit = 0;
+      const n = currentLSide * currentLSide;
+      initialEnergyPerNode = n > 0 ? engine.get_energy() / n : 0;
+      emitEnergyStats();
 
       renderFrame();
       break;
@@ -180,8 +186,28 @@ function loop() {
   if (now - lastEmit >= FRAME_EMIT_INTERVAL_MS) {
     renderFrame();
   }
+  if (now - lastEnergyEmit >= 1000) {
+    emitEnergyStats();
+  }
 
   if (running) {
     scheduleNext();
   }
+}
+
+function emitEnergyStats() {
+  if (!engine) return;
+  const n = currentLSide * currentLSide;
+  const perNode = n > 0 ? engine.get_energy() / n : 0;
+  const relDev = initialEnergyPerNode === 0
+    ? 0
+    : (perNode - initialEnergyPerNode) / initialEnergyPerNode;
+  lastEnergyEmit = performance.now();
+  self.postMessage({
+    type: "energyStats",
+    payload: {
+      perNode,
+      relDev,
+    },
+  });
 }

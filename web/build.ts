@@ -139,6 +139,21 @@ const ctx = await esbuild.context({
 });
 
 if (watch) {
+  const htmlWatcher = Deno.watchFs(["index.html.template"]);
+  const htmlRebuild = async () => {
+    try {
+      await buildHtml();
+    } catch (err) {
+      console.error("HTML rebuild failed:", err);
+    }
+  };
+  (async () => {
+    for await (const event of htmlWatcher) {
+      if (event.kind === "modify" || event.kind === "create") {
+        await htmlRebuild();
+      }
+    }
+  })();
   await ctx.watch();
   console.log("Watching...");
 } else {

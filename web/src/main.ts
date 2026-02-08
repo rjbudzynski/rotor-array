@@ -25,6 +25,8 @@ const mdViz = new MeanDirectionVisualizer(mdCanvas);
 const plot = new OrderPlot("uplot-chart");
 const controls = new ControlPanel("controls-container");
 new ColorBarVisualizer("color-bar-container");
+const energyPerNodeEl = document.getElementById("energy-per-node-value");
+const energyRelDevEl = document.getElementById("energy-rel-dev-value");
 
 const worker = new Worker(new URL("./worker.js", import.meta.url), {
   type: "module",
@@ -76,6 +78,16 @@ worker.onmessage = (e) => {
       lastUiUpdate = now;
     }
   }
+
+  if (type === "energyStats") {
+    const { perNode, relDev } = payload;
+    if (energyPerNodeEl) {
+      energyPerNodeEl.textContent = formatNumber(perNode);
+    }
+    if (energyRelDevEl) {
+      energyRelDevEl.textContent = formatRelDeviation(relDev);
+    }
+  }
 };
 
 /**
@@ -115,6 +127,20 @@ function drawArrows(
     }
   }
   ctx.stroke();
+}
+
+function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const absValue = Math.abs(value);
+  if (absValue >= 0.01 && absValue < 1000) {
+    return value.toFixed(4);
+  }
+  return value.toExponential(3);
+}
+
+function formatRelDeviation(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return value.toExponential(1);
 }
 
 controls.onReset = (preset, k, p2, p3, temp) => {
