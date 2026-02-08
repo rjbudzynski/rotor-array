@@ -4,7 +4,6 @@ import {
   MeanDirectionVisualizer,
   OrderPlot,
 } from "./ui.ts";
-import { RotorArrayVisualizer } from "./visualizer.ts";
 import { generateInitialState } from "./presets.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -12,7 +11,10 @@ const mdCanvas = document.getElementById(
   "mean-dir-canvas",
 ) as HTMLCanvasElement;
 
-const visualizer = new RotorArrayVisualizer(canvas);
+// Get canvas context for drawing ImageBitmap
+const ctx = canvas.getContext("2d");
+if (!ctx) throw new Error("Failed to get canvas context");
+
 const mdViz = new MeanDirectionVisualizer(mdCanvas);
 const plot = new OrderPlot("uplot-chart");
 const controls = new ControlPanel("controls-container");
@@ -25,19 +27,20 @@ worker.postMessage({ type: "init" });
 
 let lastUiUpdate = 0;
 
-worker.onmessage = (e) => {
+worker.onmessage = async (e) => {
   const { type, payload } = e.data;
 
   if (type === "frame") {
-    const { theta: thetaBuf, omega: omegaBuf, orderParameter, lSide } = payload;
+    const { imageBitmap, orderParameter, lSide, canvasSize } = payload;
 
-    // Fast TypedArray views of transferable buffers
-    const theta = new Float64Array(thetaBuf);
-    const omega = new Float64Array(omegaBuf);
+    // Resize canvas if needed
+    if (canvas.width !== canvasSize || canvas.height !== canvasSize) {
+      canvas.width = canvasSize;
+      canvas.height = canvasSize;
+    }
 
-    // Sync visualizer state and render
-    visualizer.setLSide(lSide);
-    visualizer.update(theta, omega, controls.arrowCheck.checked);
+    // Draw ImageBitmap directly (WASM-rendered visualization)
+    ctx.drawImage(await imageBitmap, 0, 0);
 
     const now = performance.now();
     if (now - lastUiUpdate > 100) {
@@ -56,8 +59,12 @@ controls.onReset = (preset, k, p2, p3, temp) => {
   const lSide = parseInt(controls.lInput.value) || 20;
   const { theta, omega } = generateInitialState(lSide, preset, k, p2, p3, temp);
 
-  // Sync visualizer immediately to prevent black screen or jump
-  visualizer.setLSide(lSide);
+  // Calculate upsample based on canvas size (same logic as before)
+  const container = canvas.parentElement;
+  const width = container ? container.clientWidth - 40 : 600;
+  const height = container ? container.clientHeight - 40 : 600;
+  const size = Math.max(100, Math.min(width, height));
+  const upsample = Math.max(1, Math.floor(size / lSide));
 
   worker.postMessage({
     type: "reset",
@@ -67,7 +74,7 @@ controls.onReset = (preset, k, p2, p3, temp) => {
       mField: parseFloat(controls.mInput.value) / 100,
       theta,
       omega,
-      upsample: visualizer.upsample,
+      upsample,
     },
   });
 

@@ -64,7 +64,6 @@ self.onmessage = async (e) => {
 };
 
 // Reusable buffers to avoid per-frame allocations
-let rgbaBuffer: Uint8ClampedArray | null = null;
 let thetaBuffer: Float64Array | null = null;
 let omegaBuffer: Float64Array | null = null;
 
@@ -82,10 +81,15 @@ function renderFrame() {
   const thetaPtr = engine.get_theta_ptr();
   const omegaPtr = engine.get_omega_ptr();
 
-  // Create or resize reusable buffers
-  if (!rgbaBuffer || rgbaBuffer.length !== rgbaSize) {
-    rgbaBuffer = new Uint8ClampedArray(rgbaSize);
-  }
+  // Create ImageData from WASM memory (zero-copy view)
+  const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
+  const canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
+  const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
+
+  // Create ImageBitmap for efficient transfer to main thread
+  const imageBitmap = createImageBitmap(imageData);
+
+  // Create or resize reusable buffers for theta/omega
   if (!thetaBuffer || thetaBuffer.length !== N) {
     thetaBuffer = new Float64Array(N);
   }
@@ -93,12 +97,9 @@ function renderFrame() {
     omegaBuffer = new Float64Array(N);
   }
 
-  // Copy data from WASM memory to reusable buffers (single copy, no .slice())
-  const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
+  // Copy theta/omega from WASM memory
   const thetaView = new Float64Array(memory, thetaPtr, N);
   const omegaView = new Float64Array(memory, omegaPtr, N);
-
-  rgbaBuffer.set(rgbaView);
   thetaBuffer.set(thetaView);
   omegaBuffer.set(omegaView);
 
@@ -109,21 +110,21 @@ function renderFrame() {
     t: engine.get_t(),
   };
 
-  // Transfer ownership of buffer underlying ArrayBuffers to main thread
+  // Transfer ImageBitmap and theta/omega buffers to main thread
   // deno-lint-ignore no-explicit-any
   (postMessage as any)({
     type: "frame",
     payload: {
-      buffer: rgbaBuffer.buffer,
+      imageBitmap,
       theta: thetaBuffer.buffer,
       omega: omegaBuffer.buffer,
-      orderParameter: op,
       lSide: currentLSide,
+      canvasSize,
+      orderParameter: op,
     },
-  }, [rgbaBuffer.buffer, thetaBuffer.buffer, omegaBuffer.buffer]);
+  }, [thetaBuffer.buffer, omegaBuffer.buffer]);
 
-  // Buffers are now transferred and unusable; they will be recreated on next frame
-  rgbaBuffer = null;
+  // Buffers are now transferred and unusable
   thetaBuffer = null;
   omegaBuffer = null;
 

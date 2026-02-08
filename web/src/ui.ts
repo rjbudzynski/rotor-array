@@ -400,6 +400,7 @@ export class OrderPlot {
   };
   data: [number[], number[]];
   private windowSeconds = 10;
+  private startIdx = 0; // Tracks first valid element (avoids O(n²) shift)
 
   constructor(
     containerId: string,
@@ -448,16 +449,28 @@ export class OrderPlot {
     this.data[0].push(t);
     this.data[1].push(r);
 
-    // Prune data older than 10s
+    // Prune data older than windowSeconds (O(n) using index tracking)
     const cutoff = t - this.windowSeconds;
-    while (this.data[0].length > 0 && this.data[0][0] < cutoff) {
-      this.data[0].shift();
-      this.data[1].shift();
+    const times = this.data[0];
+    // Advance startIdx past expired elements
+    while (this.startIdx < times.length && times[this.startIdx] < cutoff) {
+      this.startIdx++;
     }
 
-    this.uplot.setData(this.data);
+    // Compact arrays when too much dead space accumulates (>50% waste)
+    if (this.startIdx > 1000 || this.startIdx > times.length * 0.5) {
+      this.data[0] = times.slice(this.startIdx);
+      this.data[1] = this.data[1].slice(this.startIdx);
+      this.startIdx = 0;
+    }
 
-    // Sliding window logic: [0, 10] or [t-10, t]
+    // Pass sliced view to uPlot (efficient, no copy)
+    this.uplot.setData([
+      this.data[0].slice(this.startIdx),
+      this.data[1].slice(this.startIdx),
+    ]);
+
+    // Sliding window logic: [0, windowSeconds] or [t-windowSeconds, t]
     if (t > this.windowSeconds) {
       this.uplot.setScale("x", { min: t - this.windowSeconds, max: t });
     } else {
@@ -467,6 +480,7 @@ export class OrderPlot {
 
   reset() {
     this.data = [[], []];
+    this.startIdx = 0;
     this.uplot.setData(this.data);
     this.uplot.setScale("x", { min: 0, max: this.windowSeconds });
   }
