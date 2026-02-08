@@ -39,7 +39,7 @@ worker.onmessage = (e) => {
   const { type, payload } = e.data;
 
   if (type === "frame") {
-    const { imageBitmap, orderParameter, lSide, canvasSize } = payload;
+    const { imageBitmap, theta: thetaBuf, orderParameter, lSide, canvasSize, upsample } = payload;
 
     // Resize canvas if needed
     if (canvas.width !== canvasSize || canvas.height !== canvasSize) {
@@ -50,6 +50,11 @@ worker.onmessage = (e) => {
     // Draw ImageBitmap directly (WASM-rendered visualization)
     // ImageBitmap is transferred, not a Promise
     ctx.drawImage(imageBitmap, 0, 0);
+
+    // Draw arrows if enabled and disks are large enough
+    if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
+      drawArrows(ctx, new Float64Array(thetaBuf), lSide, upsample);
+    }
 
     const now = performance.now();
     if (now - lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
@@ -63,6 +68,40 @@ worker.onmessage = (e) => {
     }
   }
 };
+
+/**
+ * Draw direction arrows on the canvas.
+ * Arrows are drawn when individual rotors are large enough to see.
+ * @param ctx - Canvas rendering context
+ * @param theta - Float64Array of rotor angles
+ * @param lSide - Lattice side length (L)
+ * @param upsample - Pixel multiplier per rotor
+ */
+function drawArrows(ctx: CanvasRenderingContext2D, theta: Float64Array, lSide: number, upsample: number) {
+  const L = lSide;
+  const S = upsample;
+  const centerOffset = (S - 1) / 2.0;
+  const arrowLen = 0.45 * S;
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+  ctx.lineWidth = Math.max(1, S / 10);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+
+  for (let r = 0; r < L; r++) {
+    for (let c = 0; c < L; c++) {
+      const idx = r * L + c;
+      const th = theta[idx];
+      const cx = c * S + centerOffset;
+      const cy = r * S + centerOffset;
+      const ex = cx + arrowLen * Math.sin(th);
+      const ey = cy + arrowLen * Math.cos(th);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(ex, ey);
+    }
+  }
+  ctx.stroke();
+}
 
 controls.onReset = (preset, k, p2, p3, temp) => {
   const lSide = parseInt(controls.lInput.value) || DEFAULT_LATTICE_SIZE;
@@ -123,3 +162,96 @@ helpOverlay?.addEventListener("click", (e) => {
 setTimeout(() => {
   controls.triggerReset();
 }, 200);
+
+// ============================================================================
+// LOCAL STORAGE PERSISTENCE
+// ============================================================================
+
+const STORAGE_KEY = "rotorArrayParams";
+
+/**
+ * Save current parameters to localStorage.
+ * Called before page unload and when parameters change.
+ */
+function saveParameters() {
+  try {
+    const params = {
+      lSide: controls.lInput.value,
+      preset: controls.presetSelect.value,
+      j: controls.jInput.value,
+      m: controls.mInput.value,
+      timeScale: controls.timeInput.value,
+      temp: controls.tempInput.value,
+      showArrows: controls.arrowCheck.checked,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(params));
+  } catch {
+    // localStorage may not be available (private mode, etc.)
+  }
+}
+
+/**
+ * Load saved parameters from localStorage.
+ * Called on page load.
+ */
+function loadParameters() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const params = JSON.parse(saved);
+      
+      // Restore values if they exist
+      if (params.lSide) controls.lInput.value = params.lSide;
+      if (params.preset) controls.presetSelect.value = params.preset;
+      if (params.j) {
+        controls.jInput.value = params.j;
+        // Update label
+        const val = parseFloat(params.j) / SLIDER_SCALE;
+        // Find and update the label
+        const jLabel = controls.jInput.parentElement?.querySelector("label");
+        if (jLabel) jLabel.textContent = `Coupling (J): ${val.toFixed(2)}`;
+      }
+      if (params.m) {
+        controls.mInput.value = params.m;
+        const val = parseFloat(params.m) / SLIDER_SCALE;
+        const mLabel = controls.mInput.parentElement?.querySelector("label");
+        if (mLabel) mLabel.textContent = `Field (M): ${val.toFixed(2)}`;
+      }
+      if (params.timeScale) {
+        controls.timeInput.value = params.timeScale;
+        const val = parseFloat(params.timeScale) / SLIDER_SCALE;
+        const tLabel = controls.timeInput.parentElement?.querySelector("label");
+        if (tLabel) tLabel.textContent = `Time Scale: ${val.toFixed(1)}x`;
+      }
+      if (params.temp) {
+        controls.tempInput.value = params.temp;
+        const val = parseFloat(params.temp) / SLIDER_SCALE;
+        const tempLabel = controls.tempInput.parentElement?.querySelector("label");
+        if (tempLabel) tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
+      }
+      if (params.showArrows !== undefined) {
+        controls.arrowCheck.checked = params.showArrows;
+      }
+      
+      // Update preset-specific UI (k, p2, p3 fields)
+      controls.updatePresetUI();
+    }
+  } catch {
+    // localStorage may not be available or data may be corrupt
+  }
+}
+
+// Load saved parameters on startup
+loadParameters();
+
+// Save parameters when window is about to close
+window.addEventListener("beforeunload", saveParameters);
+
+// Save parameters when they change
+controls.jInput.addEventListener("change", saveParameters);
+controls.mInput.addEventListener("change", saveParameters);
+controls.timeInput.addEventListener("change", saveParameters);
+controls.tempInput.addEventListener("change", saveParameters);
+controls.lInput.addEventListener("change", saveParameters);
+controls.presetSelect.addEventListener("change", saveParameters);
+controls.arrowCheck.addEventListener("change", saveParameters);

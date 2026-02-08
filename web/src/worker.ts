@@ -115,6 +115,9 @@ async function renderFrame() {
     t: engine.get_t(),
   };
 
+  // Calculate current upsample for arrow rendering
+  const upsample = Math.floor(canvasSize / currentLSide);
+
   // Transfer ImageBitmap and theta/omega buffers to main thread
   // deno-lint-ignore no-explicit-any
   (postMessage as any)({
@@ -125,6 +128,7 @@ async function renderFrame() {
       omega: omegaBuffer.buffer,
       lSide: currentLSide,
       canvasSize,
+      upsample,
       orderParameter: op,
     },
   }, [imageBitmap, thetaBuffer.buffer, omegaBuffer.buffer]);
