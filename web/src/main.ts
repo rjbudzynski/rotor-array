@@ -10,8 +10,6 @@ import {
   CANVAS_PADDING,
   SLIDER_SCALE,
   DEFAULT_LATTICE_SIZE,
-  MIN_LATTICE_SIZE,
-  MAX_LATTICE_SIZE,
 } from "./constants.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -248,7 +246,7 @@ function loadParameters() {
 loadParameters();
 
 // Save parameters when window is about to close
-window.addEventListener("beforeunload", saveParameters);
+globalThis.addEventListener("beforeunload", saveParameters);
 
 // Save parameters when they change
 controls.jInput.addEventListener("change", saveParameters);

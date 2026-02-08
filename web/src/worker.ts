@@ -156,7 +156,7 @@ function loop() {
   const frameDt = (timestamp - lastFrame) / 1000;
   lastFrame = timestamp;
 
-  accumulator += Math.min(frameDt, 0.1);
+  accumulator += Math.min(frameDt, MAX_ACCUMULATOR);
 
   while (accumulator >= SIMULATION_TIMESTEP) {
     engine.step(SIMULATION_TIMESTEP * timeScale);
