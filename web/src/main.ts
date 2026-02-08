@@ -6,10 +6,10 @@ import {
 } from "./ui.ts";
 import { generateInitialState } from "./presets.ts";
 import {
-  UI_UPDATE_INTERVAL_MS,
   CANVAS_PADDING,
-  SLIDER_SCALE,
   DEFAULT_LATTICE_SIZE,
+  SLIDER_SCALE,
+  UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -37,7 +37,14 @@ worker.onmessage = (e) => {
   const { type, payload } = e.data;
 
   if (type === "frame") {
-    const { imageBitmap, theta: thetaBuf, orderParameter, lSide, canvasSize, upsample } = payload;
+    const {
+      imageBitmap,
+      theta: thetaBuf,
+      orderParameter,
+      lSide,
+      canvasSize,
+      upsample,
+    } = payload;
 
     // Resize canvas if needed
     if (canvas.width !== canvasSize || canvas.height !== canvasSize) {
@@ -78,7 +85,12 @@ worker.onmessage = (e) => {
  * @param lSide - Lattice side length (L)
  * @param upsample - Pixel multiplier per rotor
  */
-function drawArrows(ctx: CanvasRenderingContext2D, theta: Float64Array, lSide: number, upsample: number) {
+function drawArrows(
+  ctx: CanvasRenderingContext2D,
+  theta: Float64Array,
+  lSide: number,
+  upsample: number,
+) {
   const L = lSide;
   const S = upsample;
   const centerOffset = (S - 1) / 2.0;
@@ -200,7 +212,7 @@ function loadParameters() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const params = JSON.parse(saved);
-      
+
       // Restore values if they exist
       if (params.lSide) controls.lInput.value = params.lSide;
       if (params.preset) controls.presetSelect.value = params.preset;
@@ -227,13 +239,17 @@ function loadParameters() {
       if (params.temp) {
         controls.tempInput.value = params.temp;
         const val = parseFloat(params.temp) / SLIDER_SCALE;
-        const tempLabel = controls.tempInput.parentElement?.querySelector("label");
-        if (tempLabel) tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
+        const tempLabel = controls.tempInput.parentElement?.querySelector(
+          "label",
+        );
+        if (tempLabel) {
+          tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
+        }
       }
       if (params.showArrows !== undefined) {
         controls.arrowCheck.checked = params.showArrows;
       }
-      
+
       // Update preset-specific UI (k, p2, p3 fields)
       controls.updatePresetUI();
     }

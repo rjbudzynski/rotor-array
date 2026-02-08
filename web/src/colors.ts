@@ -1,9 +1,9 @@
 import {
+  ENERGY_SCALE_FACTOR,
+  HUE_OFFSET,
   LUT_ANGLE_STEPS,
   LUT_ENERGY_STEPS,
   LUT_MAX_ENERGY,
-  HUE_OFFSET,
-  ENERGY_SCALE_FACTOR,
 } from "./constants.ts";
 
 /**

@@ -3,9 +3,9 @@ import init, {
   WasmVisualizer,
 } from "../simulation-wasm/pkg/simulation_wasm.js";
 import {
-  SIMULATION_TIMESTEP,
-  MAX_ACCUMULATOR,
   FRAME_EMIT_INTERVAL_MS,
+  MAX_ACCUMULATOR,
+  SIMULATION_TIMESTEP,
 } from "./constants.ts";
 
 /** WASM module exports from wasm-bindgen */
@@ -23,7 +23,6 @@ let timeScale = 1.0;
 let lastFrame = 0;
 let accumulator = 0;
 let lastEmit = 0;
-
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;

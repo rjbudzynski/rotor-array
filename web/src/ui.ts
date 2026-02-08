@@ -2,9 +2,9 @@ import { getPresetByName, PRESETS } from "./presets.ts";
 import { hsvToRgb, omegaToValue, thetaToHue } from "./colors.ts";
 import uPlot from "uplot";
 import {
-  PLOT_WINDOW_SECONDS,
-  MAX_DEAD_ELEMENTS,
   COMPACTION_WASTE_THRESHOLD,
+  MAX_DEAD_ELEMENTS,
+  PLOT_WINDOW_SECONDS,
 } from "./constants.ts";
 
 export class MeanDirectionVisualizer {

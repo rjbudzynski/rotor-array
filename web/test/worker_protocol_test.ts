@@ -94,7 +94,14 @@ Deno.test("Worker reset message includes all required parameters", () => {
   // Simulate the reset logic from main.ts
   controls.onReset = (preset, k, p2, p3, temp) => {
     const lSide = parseInt(controls.lInput.value) || 20;
-    const { theta, omega } = generateInitialState(lSide, preset, k, p2, p3, temp);
+    const { theta, omega } = generateInitialState(
+      lSide,
+      preset,
+      k,
+      p2,
+      p3,
+      temp,
+    );
 
     // This is the key fix - visualizer.setLSide must be called before getting upsample
     mockVisualizer.setLSide(lSide);
@@ -128,15 +135,30 @@ Deno.test("Worker reset message includes all required parameters", () => {
   assert("mField" in payload, "payload should include mField");
   assert("theta" in payload, "payload should include theta");
   assert("omega" in payload, "payload should include omega");
-  assert("upsample" in payload, "payload should include upsample (required for WasmVisualizer)");
+  assert(
+    "upsample" in payload,
+    "payload should include upsample (required for WasmVisualizer)",
+  );
 
   // Verify types
   assertEquals(typeof payload.lSide, "number", "lSide should be a number");
-  assertEquals(typeof payload.jCoupling, "number", "jCoupling should be a number");
+  assertEquals(
+    typeof payload.jCoupling,
+    "number",
+    "jCoupling should be a number",
+  );
   assertEquals(typeof payload.mField, "number", "mField should be a number");
-  assertEquals(typeof payload.upsample, "number", "upsample should be a number");
+  assertEquals(
+    typeof payload.upsample,
+    "number",
+    "upsample should be a number",
+  );
   assert(capturedUpsample > 0, "upsample should be positive");
-  assertEquals(payload.upsample, capturedUpsample, "upsample should match calculated value");
+  assertEquals(
+    payload.upsample,
+    capturedUpsample,
+    "upsample should match calculated value",
+  );
 
   // Verify arrays
   assert(payload.theta instanceof Float64Array, "theta should be Float64Array");
