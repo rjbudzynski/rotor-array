@@ -47,6 +47,9 @@ worker.onmessage = (e) => {
       canvas.height = canvasSize;
     }
 
+    // Clear canvas to prevent arrow artifacts from previous frames
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     // Draw ImageBitmap directly (WASM-rendered visualization)
     // ImageBitmap is transferred, not a Promise
     ctx.drawImage(imageBitmap, 0, 0);
