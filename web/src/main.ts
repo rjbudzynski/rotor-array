@@ -67,6 +67,7 @@ controls.onReset = (preset, k, p2, p3, temp) => {
       mField: parseFloat(controls.mInput.value) / 100,
       theta,
       omega,
+      upsample: visualizer.upsample,
     },
   });
 
