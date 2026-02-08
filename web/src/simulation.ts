@@ -14,10 +14,15 @@ export interface OrderParameter {
   meanSin: number;
 }
 
+/** WASM module exports from wasm-bindgen */
+export interface WasmExports {
+  memory: WebAssembly.Memory;
+}
+
 export class SimulationEngine {
   params: SimulationParams;
   wasm: WasmSimulationEngine | null = null;
-  wasm_exports: unknown = null;
+  wasmExports: WasmExports | null = null;
 
   // These will point to WASM memory
   private _theta: Float64Array | null = null;
@@ -33,7 +38,7 @@ export class SimulationEngine {
   }
 
   async initialize() {
-    this.wasm_exports = await init();
+    this.wasmExports = await init() as WasmExports;
     this.wasm = new WasmSimulationEngine(
       this.params.lSide,
       this.params.jCoupling,
@@ -43,9 +48,8 @@ export class SimulationEngine {
 
   // Helper to get views of WASM memory
   private updateViews() {
-    if (!this.wasm || !this.wasm_exports) return;
-    // deno-lint-ignore no-explicit-any
-    const memory = (this.wasm_exports as any).memory.buffer;
+    if (!this.wasm || !this.wasmExports) return;
+    const memory = this.wasmExports.memory.buffer;
     const thetaPtr = this.wasm.get_theta_ptr();
     const omegaPtr = this.wasm.get_omega_ptr();
     const N = this.params.lSide * this.params.lSide;
