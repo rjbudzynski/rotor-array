@@ -2,6 +2,11 @@ import init, {
   WasmSimulationEngine,
   WasmVisualizer,
 } from "../simulation-wasm/pkg/simulation_wasm.js";
+import {
+  SIMULATION_TIMESTEP,
+  MAX_ACCUMULATOR,
+  FRAME_EMIT_INTERVAL_MS,
+} from "./constants.ts";
 
 /** WASM module exports from wasm-bindgen */
 interface WasmExports {
@@ -18,7 +23,7 @@ let timeScale = 1.0;
 let lastFrame = 0;
 let accumulator = 0;
 let lastEmit = 0;
-const SIM_DT = 0.016;
+
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -131,6 +136,15 @@ async function renderFrame() {
   lastEmit = performance.now();
 }
 
+// MessageChannel for tighter scheduling (bypasses setTimeout 4ms minimum)
+const scheduleChannel = new MessageChannel();
+scheduleChannel.port2.onmessage = () => {
+  if (running) {
+    loop();
+  }
+};
+const scheduleNext = () => scheduleChannel.port1.postMessage(null);
+
 function loop() {
   if (!running || !engine || !visualizer || !wasmExports) return;
 
@@ -140,17 +154,17 @@ function loop() {
 
   accumulator += Math.min(frameDt, 0.1);
 
-  while (accumulator >= SIM_DT) {
-    engine.step(SIM_DT * timeScale);
-    accumulator -= SIM_DT;
+  while (accumulator >= SIMULATION_TIMESTEP) {
+    engine.step(SIMULATION_TIMESTEP * timeScale);
+    accumulator -= SIMULATION_TIMESTEP;
   }
 
   const now = performance.now();
-  if (now - lastEmit >= 16.6) {
+  if (now - lastEmit >= FRAME_EMIT_INTERVAL_MS) {
     renderFrame();
   }
 
   if (running) {
-    setTimeout(loop, 0);
+    scheduleNext();
   }
 }

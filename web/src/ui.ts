@@ -1,6 +1,11 @@
 import { getPresetByName, PRESETS } from "./presets.ts";
 import { hsvToRgb, omegaToValue, thetaToHue } from "./colors.ts";
 import uPlot from "uplot";
+import {
+  PLOT_WINDOW_SECONDS,
+  MAX_DEAD_ELEMENTS,
+  COMPACTION_WASTE_THRESHOLD,
+} from "./constants.ts";
 
 export class MeanDirectionVisualizer {
   canvas: HTMLCanvasElement;
@@ -399,7 +404,7 @@ export class OrderPlot {
     setScale: (key: string, opts: { min: number; max: number }) => void;
   };
   data: [number[], number[]];
-  private windowSeconds = 10;
+  private windowSeconds = PLOT_WINDOW_SECONDS;
   private startIdx = 0; // Tracks first valid element (avoids O(n²) shift)
 
   constructor(
@@ -457,8 +462,11 @@ export class OrderPlot {
       this.startIdx++;
     }
 
-    // Compact arrays when too much dead space accumulates (>50% waste)
-    if (this.startIdx > 1000 || this.startIdx > times.length * 0.5) {
+    // Compact arrays when too much dead space accumulates
+    if (
+      this.startIdx > MAX_DEAD_ELEMENTS ||
+      this.startIdx > times.length * COMPACTION_WASTE_THRESHOLD
+    ) {
       this.data[0] = times.slice(this.startIdx);
       this.data[1] = this.data[1].slice(this.startIdx);
       this.startIdx = 0;
