@@ -27,7 +27,7 @@ worker.postMessage({ type: "init" });
 
 let lastUiUpdate = 0;
 
-worker.onmessage = async (e) => {
+worker.onmessage = (e) => {
   const { type, payload } = e.data;
 
   if (type === "frame") {
@@ -40,7 +40,8 @@ worker.onmessage = async (e) => {
     }
 
     // Draw ImageBitmap directly (WASM-rendered visualization)
-    ctx.drawImage(await imageBitmap, 0, 0);
+    // ImageBitmap is transferred, not a Promise
+    ctx.drawImage(imageBitmap, 0, 0);
 
     const now = performance.now();
     if (now - lastUiUpdate > 100) {

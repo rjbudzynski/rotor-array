@@ -67,7 +67,7 @@ self.onmessage = async (e) => {
 let thetaBuffer: Float64Array | null = null;
 let omegaBuffer: Float64Array | null = null;
 
-function renderFrame() {
+async function renderFrame() {
   if (!engine || !visualizer || !wasmExports) return;
 
   const N = currentLSide * currentLSide;
@@ -87,7 +87,7 @@ function renderFrame() {
   const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
   // Create ImageBitmap for efficient transfer to main thread
-  const imageBitmap = createImageBitmap(imageData);
+  const imageBitmap = await createImageBitmap(imageData);
 
   // Create or resize reusable buffers for theta/omega
   if (!thetaBuffer || thetaBuffer.length !== N) {
@@ -122,7 +122,7 @@ function renderFrame() {
       canvasSize,
       orderParameter: op,
     },
-  }, [thetaBuffer.buffer, omegaBuffer.buffer]);
+  }, [imageBitmap, thetaBuffer.buffer, omegaBuffer.buffer]);
 
   // Buffers are now transferred and unusable
   thetaBuffer = null;
