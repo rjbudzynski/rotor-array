@@ -11,6 +11,7 @@ from presets import generate_initial_state
 from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
 from ui import ControlPanel, InfoPanel
 from visualizer import OPENGL_AVAILABLE, RotorArrayGLVisualizer, RotorArrayVisualizer
+
 if OPENGL_AVAILABLE:
     from visualizer import RotorArrayGLVisualizer
 
@@ -198,8 +199,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.use_opengl = enabled
         self._replace_visualizer()
-        if enabled and self.controls.arrows_checkbox.isChecked():
-            self.toggle_arrows(True)
+        # Sync arrow state after visualizer switch
+        self.toggle_arrows(self.controls.arrows_checkbox.isChecked())
 
         if was_running:
             self.toggle_simulation(True)
@@ -285,9 +286,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.update_energy_display()
 
                     # Update mean direction visualizer
-                    self.info_panel.mean_dir_visualizer.update_state(
-                        op.r, op.mean_cos, op.mean_sin
-                    )
+                    self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
                     # Update order parameter plot
                     times = [h[0] for h in self.order_history]
