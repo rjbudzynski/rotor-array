@@ -9,7 +9,10 @@
 <body>
     <div id="app">
         <div id="canvas-container">
-            <canvas id="sim-canvas"></canvas>
+            <div id="canvas-stack">
+                <canvas id="sim-canvas"></canvas>
+                <canvas id="overlay-canvas"></canvas>
+            </div>
         </div>
         <div id="sidebar">
             <h1>Rotor Array <button id="help-btn" title="Help">?</button></h1>

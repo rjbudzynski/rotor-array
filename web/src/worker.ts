@@ -25,6 +25,7 @@ let accumulator = 0;
 let lastEmit = 0;
 let lastEnergyEmit = 0;
 let initialEnergyPerNode = 0;
+let showArrows = true;
 
 let initPromise: Promise<WasmExports> | null = null;
 
@@ -50,11 +51,22 @@ self.onmessage = async (e) => {
 
     case "reset": {
       await ensureInit();
-      const { lSide, jCoupling, mField, theta, omega, upsample } = payload;
+      const {
+        lSide,
+        jCoupling,
+        mField,
+        theta,
+        omega,
+        upsample,
+        showArrows: showArrowsPayload,
+      } = payload;
       currentLSide = lSide;
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);
       engine.set_state(theta, omega, 0);
       visualizer = new WasmVisualizer(lSide, upsample);
+      if (typeof showArrowsPayload === "boolean") {
+        showArrows = showArrowsPayload;
+      }
 
       lastFrame = performance.now();
       accumulator = 0;
@@ -83,6 +95,12 @@ self.onmessage = async (e) => {
     case "updateParams":
       engine?.update_params(payload.j, payload.m);
       timeScale = payload.t;
+      break;
+
+    case "setRenderOptions":
+      if (typeof payload.showArrows === "boolean") {
+        showArrows = payload.showArrows;
+      }
       break;
   }
 };
@@ -113,19 +131,21 @@ async function renderFrame() {
   // Create ImageBitmap for efficient transfer to main thread
   const imageBitmap = await createImageBitmap(imageData);
 
-  // Create or resize reusable buffers for theta/omega
-  if (!thetaBuffer || thetaBuffer.length !== N) {
-    thetaBuffer = new Float64Array(N);
-  }
-  if (!omegaBuffer || omegaBuffer.length !== N) {
-    omegaBuffer = new Float64Array(N);
-  }
+  if (showArrows) {
+    // Create or resize reusable buffers for theta/omega
+    if (!thetaBuffer || thetaBuffer.length !== N) {
+      thetaBuffer = new Float64Array(N);
+    }
+    if (!omegaBuffer || omegaBuffer.length !== N) {
+      omegaBuffer = new Float64Array(N);
+    }
 
-  // Copy theta/omega from WASM memory
-  const thetaView = new Float64Array(memory, thetaPtr, N);
-  const omegaView = new Float64Array(memory, omegaPtr, N);
-  thetaBuffer.set(thetaView);
-  omegaBuffer.set(omegaView);
+    // Copy theta/omega from WASM memory
+    const thetaView = new Float64Array(memory, thetaPtr, N);
+    const omegaView = new Float64Array(memory, omegaPtr, N);
+    thetaBuffer.set(thetaView);
+    omegaBuffer.set(omegaView);
+  }
 
   const op = {
     r: engine.get_order_parameter_r(),
@@ -138,23 +158,39 @@ async function renderFrame() {
   const upsample = Math.floor(canvasSize / currentLSide);
 
   // Transfer ImageBitmap and theta/omega buffers to main thread
-  // deno-lint-ignore no-explicit-any
-  (postMessage as any)({
+  const payload = {
+    imageBitmap,
+    lSide: currentLSide,
+    canvasSize,
+    upsample,
+    orderParameter: op,
+  } as {
+    imageBitmap: ImageBitmap;
+    lSide: number;
+    canvasSize: number;
+    upsample: number;
+    orderParameter: typeof op;
+    theta?: ArrayBuffer;
+    omega?: ArrayBuffer;
+  };
+
+  const transfer: Transferable[] = [imageBitmap];
+  if (showArrows && thetaBuffer && omegaBuffer) {
+    payload.theta = thetaBuffer.buffer;
+    payload.omega = omegaBuffer.buffer;
+    transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
+  }
+
+  (postMessage as typeof self.postMessage)({
     type: "frame",
-    payload: {
-      imageBitmap,
-      theta: thetaBuffer.buffer,
-      omega: omegaBuffer.buffer,
-      lSide: currentLSide,
-      canvasSize,
-      upsample,
-      orderParameter: op,
-    },
-  }, [imageBitmap, thetaBuffer.buffer, omegaBuffer.buffer]);
+    payload,
+  }, transfer);
 
   // Buffers are now transferred and unusable
-  thetaBuffer = null;
-  omegaBuffer = null;
+  if (showArrows) {
+    thetaBuffer = null;
+    omegaBuffer = null;
+  }
 
   lastEmit = performance.now();
 }

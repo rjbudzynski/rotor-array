@@ -13,13 +13,20 @@ import {
 } from "./constants.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
+const overlayCanvas = document.getElementById(
+  "overlay-canvas",
+) as HTMLCanvasElement;
 const mdCanvas = document.getElementById(
   "mean-dir-canvas",
 ) as HTMLCanvasElement;
 
 // Get canvas context for drawing ImageBitmap
-const ctx = canvas.getContext("2d");
-if (!ctx) throw new Error("Failed to get canvas context");
+const bitmapCtx = canvas.getContext("bitmaprenderer");
+const ctx2d = bitmapCtx ? null : canvas.getContext("2d");
+if (!bitmapCtx && !ctx2d) throw new Error("Failed to get canvas context");
+
+const overlayCtx = overlayCanvas.getContext("2d");
+if (!overlayCtx) throw new Error("Failed to get overlay canvas context");
 
 const mdViz = new MeanDirectionVisualizer(mdCanvas);
 const plot = new OrderPlot("uplot-chart");
@@ -34,6 +41,7 @@ const worker = new Worker(new URL("./worker.js", import.meta.url), {
 worker.postMessage({ type: "init" });
 
 let lastUiUpdate = 0;
+let displaySize = 0;
 
 worker.onmessage = (e) => {
   const { type, payload } = e.data;
@@ -48,23 +56,43 @@ worker.onmessage = (e) => {
       upsample,
     } = payload;
 
-    // Resize canvas if needed
+    // Resize canvases if needed
     if (canvas.width !== canvasSize || canvas.height !== canvasSize) {
       canvas.width = canvasSize;
       canvas.height = canvasSize;
+      overlayCanvas.width = canvasSize;
+      overlayCanvas.height = canvasSize;
     }
-
-    // Clear canvas to prevent arrow artifacts from previous frames
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (displaySize > 0) {
+      const sizePx = `${displaySize}px`;
+      if (canvas.style.width !== sizePx) {
+        canvas.style.width = sizePx;
+        canvas.style.height = sizePx;
+        overlayCanvas.style.width = sizePx;
+        overlayCanvas.style.height = sizePx;
+      }
+    }
 
     // Draw ImageBitmap directly (WASM-rendered visualization)
     // ImageBitmap is transferred, not a Promise
-    ctx.drawImage(imageBitmap, 0, 0);
+    if (bitmapCtx) {
+      bitmapCtx.transferFromImageBitmap(imageBitmap);
+    } else if (ctx2d) {
+      ctx2d.drawImage(imageBitmap, 0, 0);
+    }
     imageBitmap.close();
 
+    // Clear overlay to prevent arrow artifacts from previous frames
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
     // Draw arrows if enabled and disks are large enough
-    if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
-      drawArrows(ctx, new Float64Array(thetaBuf), lSide, upsample);
+    if (
+      controls.arrowCheck.checked &&
+      thetaBuf &&
+      upsample >= 4 &&
+      lSide <= 60
+    ) {
+      drawArrows(overlayCtx, new Float64Array(thetaBuf), lSide, upsample);
     }
 
     const now = performance.now();
@@ -153,6 +181,12 @@ controls.onReset = (preset, k, p2, p3, temp) => {
   const height = container ? container.clientHeight - CANVAS_PADDING : 600;
   const size = Math.max(100, Math.min(width, height));
   const upsample = Math.max(1, Math.floor(size / lSide));
+  displaySize = size;
+  const sizePx = `${displaySize}px`;
+  canvas.style.width = sizePx;
+  canvas.style.height = sizePx;
+  overlayCanvas.style.width = sizePx;
+  overlayCanvas.style.height = sizePx;
 
   worker.postMessage({
     type: "reset",
@@ -163,6 +197,7 @@ controls.onReset = (preset, k, p2, p3, temp) => {
       theta,
       omega,
       upsample,
+      showArrows: controls.arrowCheck.checked,
     },
   });
 
@@ -175,6 +210,13 @@ controls.onReset = (preset, k, p2, p3, temp) => {
 
 controls.onParamChange = (j, m, t) => {
   worker.postMessage({ type: "updateParams", payload: { j, m, t } });
+};
+
+controls.onArrowChange = (show) => {
+  worker.postMessage({
+    type: "setRenderOptions",
+    payload: { showArrows: show },
+  });
 };
 
 controls.onStartStop = (running) => {
