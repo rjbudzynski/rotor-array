@@ -339,7 +339,7 @@ class ControlPanel(QtWidgets.QWidget):
         # J coupling slider
         self.j_label = QtWidgets.QLabel("Coupling (J): 1.00")
         self.j_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.j_slider.setRange(0, 500)  # 0.0 to 5.0
+        self.j_slider.setRange(0, 2000)  # 0.0 to 20.0
         self.j_slider.setValue(100)
         self.j_slider.valueChanged.connect(self._on_j_changed)
         self.main_layout.addWidget(self.j_label)
@@ -348,7 +348,7 @@ class ControlPanel(QtWidgets.QWidget):
         # M field slider
         self.m_label = QtWidgets.QLabel("Field (M): 0.00")
         self.m_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.m_slider.setRange(0, 1000)  # 0.0 to 10.0
+        self.m_slider.setRange(0, 2000)  # 0.0 to 20.0
         self.m_slider.setValue(0)
         self.m_slider.valueChanged.connect(self._on_m_changed)
         self.main_layout.addWidget(self.m_label)
