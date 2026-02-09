@@ -6,6 +6,13 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from colors import hsv_to_rgb_array, omega_to_value, theta_to_hue
 
+try:
+    import pyqtgraph.opengl as gl
+except Exception:  # pragma: no cover - optional dependency
+    gl = None
+
+OPENGL_AVAILABLE = gl is not None
+
 
 class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     """
@@ -268,3 +275,76 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             self._render_arrows(theta)
         else:
             self._theta_cache = None
+
+
+if gl is not None:
+
+    class RotorArrayGLVisualizer(gl.GLViewWidget):
+        """
+        OpenGL-based visualizer using GLImageItem for higher throughput at large L.
+        """
+
+        ARROW_THRESHOLD = 60
+
+        def __init__(self, l_side: int, parent: QtWidgets.QWidget | None = None):
+            super().__init__(parent=parent)
+            self.l_side = l_side
+            self.n_rotors = l_side**2
+            self._upsample = RotorArrayVisualizer._calculate_upsample(l_side)
+            self._rgb_block_view: np.ndarray | None = None
+
+            self.setBackgroundColor("k")
+            self.setCameraPosition(distance=5.0, elevation=90, azimuth=0)
+
+            self.img = gl.GLImageItem(np.zeros((1, 1, 4), dtype=np.uint8))
+            self.addItem(self.img)
+            self.set_l_side(l_side)
+
+        def toggle_arrows(self, show: bool) -> None:
+            # No arrow overlay in OpenGL path (yet).
+            return
+
+        def set_l_side(self, l_side: int) -> None:
+            self.l_side = l_side
+            self.n_rotors = l_side**2
+
+            s = RotorArrayVisualizer._calculate_upsample(l_side)
+            self._upsample = s
+            total_size = l_side * s
+
+            y, x = np.ogrid[:s, :s]
+            center = (s - 1) / 2.0
+            dist = np.sqrt((x - center) ** 2 + (y - center) ** 2)
+            radius = 0.45 * s
+            mask_f = np.clip(radius + 0.5 - dist, 0, 1)
+            mask = (mask_f * 255).astype(np.uint8)
+            alpha_mask = np.tile(mask, (l_side, l_side))
+
+            self.rgba_buffer = np.zeros((total_size, total_size, 4), dtype=np.uint8)
+            self.rgba_buffer[..., 3] = alpha_mask
+            self._rgb_block_view = self.rgba_buffer[..., :3].reshape(l_side, s, l_side, s, 3)
+
+            self.img.setData(self.rgba_buffer)
+            self.img.resetTransform()
+            self.img.translate(-0.5, -0.5, 0)
+            self.img.scale(1.0 / s, 1.0 / s, 1.0)
+            self.opts["center"] = QtGui.QVector3D(
+                (l_side - 1) / 2.0, (l_side - 1) / 2.0, 0
+            )
+            self.setCameraPosition(distance=max(5.0, l_side / 2.0), elevation=90, azimuth=0)
+
+        def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
+            if len(theta) != self.n_rotors:
+                return
+            if self._rgb_block_view is None:
+                return
+
+            hues = theta_to_hue(theta)
+            vals = omega_to_value(omega**2)
+            sats = np.ones_like(hues)
+            rgb = hsv_to_rgb_array(hues, sats, vals)
+            rgb_2d = rgb.reshape(self.l_side, self.l_side, 3)
+            rgb_xy = rgb_2d.transpose(1, 0, 2)
+            self._rgb_block_view[:, :, :, :, :] = rgb_xy[:, None, :, None, :]
+
+            self.img.setData(self.rgba_buffer)

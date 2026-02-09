@@ -10,7 +10,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from presets import generate_initial_state
 from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
 from ui import ControlPanel, InfoPanel
-from visualizer import RotorArrayVisualizer
+from visualizer import OPENGL_AVAILABLE, RotorArrayVisualizer
+if OPENGL_AVAILABLE:
+    from visualizer import RotorArrayGLVisualizer
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +41,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.j_coupling = 1.0
         self.m_field = 0.0
         self.use_numba = False
+        self.use_opengl = False
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         self.engine = SimulationEngine(params, use_numba=self.use_numba)
@@ -57,13 +60,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.info_panel = InfoPanel()
         self.main_layout.addWidget(self.info_panel, stretch=1)
 
-        self.visualizer = RotorArrayVisualizer(l_side)
+        self.visualizer = self._build_visualizer()
         self.main_layout.addWidget(self.visualizer, stretch=4)
 
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
         self.controls.set_numba_enabled(NUMBA_AVAILABLE)
         self.controls.set_numba_checked(self.use_numba and NUMBA_AVAILABLE)
+        self.controls.set_opengl_enabled(OPENGL_AVAILABLE)
+        self.controls.set_opengl_checked(self.use_opengl and OPENGL_AVAILABLE)
         self.main_layout.addWidget(self.controls, stretch=1)
 
         # Connect controls
@@ -85,6 +90,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.set_time_callback(self.update_time_scale)
         self.controls.set_arrows_callback(self.toggle_arrows)
         self.controls.set_numba_callback(self.update_numba)
+        self.controls.set_opengl_callback(self.update_opengl)
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
         self.controls.help_button.clicked.connect(self.show_help)
@@ -109,6 +115,19 @@ class MainWindow(QtWidgets.QMainWindow):
         super().showEvent(event)
         # Re-sync the visualizer once layout is likely stable
         self.visualizer.set_l_side(self.l_side)
+        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+
+    def _build_visualizer(self):
+        if self.use_opengl and OPENGL_AVAILABLE:
+            return RotorArrayGLVisualizer(self.l_side)
+        return RotorArrayVisualizer(self.l_side)
+
+    def _replace_visualizer(self) -> None:
+        self.main_layout.removeWidget(self.visualizer)
+        self.visualizer.setParent(None)
+        self.visualizer.deleteLater()
+        self.visualizer = self._build_visualizer()
+        self.main_layout.insertWidget(1, self.visualizer, stretch=4)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
 
     def get_initial_state(self) -> np.ndarray:
@@ -168,6 +187,28 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.use_numba = enabled
         self.reinit_simulation(self.l_side)
+
+    def update_opengl(self, enabled: bool):
+        if enabled and not OPENGL_AVAILABLE:
+            self.controls.set_opengl_checked(False)
+            return
+        was_running = self.timer.isActive()
+        if was_running:
+            self.toggle_simulation(False)
+
+        self.use_opengl = enabled
+        if enabled:
+            if self.controls.arrows_checkbox.isChecked():
+                self.controls.set_arrows_checked(False)
+                self.toggle_arrows(False)
+            self.controls.arrows_checkbox.setEnabled(False)
+        else:
+            self.controls.arrows_checkbox.setEnabled(True)
+
+        self._replace_visualizer()
+
+        if was_running:
+            self.toggle_simulation(True)
 
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)

@@ -386,6 +386,11 @@ class ControlPanel(QtWidgets.QWidget):
         self.numba_checkbox.setToolTip("Use Numba-optimized physics kernel if available.")
         self.main_layout.addWidget(self.numba_checkbox)
 
+        # OpenGL renderer toggle
+        self.opengl_checkbox = QtWidgets.QCheckBox("Use OpenGL Renderer")
+        self.opengl_checkbox.setToolTip("Use pyqtgraph.opengl for rendering if available.")
+        self.main_layout.addWidget(self.opengl_checkbox)
+
         # Buttons
         self.start_stop_button = QtWidgets.QPushButton("Start")
         self.start_stop_button.setCheckable(True)
@@ -402,10 +407,12 @@ class ControlPanel(QtWidgets.QWidget):
         self.time_callback: Callable[[float], None] = lambda x: None
         self.arrows_callback: Callable[[bool], None] = lambda x: None
         self.numba_callback: Callable[[bool], None] = lambda x: None
+        self.opengl_callback: Callable[[bool], None] = lambda x: None
 
         # Connect arrows checkbox
         self.arrows_checkbox.stateChanged.connect(self._on_arrows_changed)
         self.numba_checkbox.stateChanged.connect(self._on_numba_changed)
+        self.opengl_checkbox.stateChanged.connect(self._on_opengl_changed)
 
     def _handle_preset_ui_change(self, index: int) -> None:
         preset_name = self.preset_combo.currentText()
@@ -510,13 +517,29 @@ class ControlPanel(QtWidgets.QWidget):
         """Enable/disable the numba toggle if support is unavailable."""
         self.numba_checkbox.setEnabled(enabled)
 
+    def set_opengl_checked(self, checked: bool) -> None:
+        """Programmatically set the OpenGL checkbox state."""
+        self.opengl_checkbox.setChecked(checked)
+
+    def set_opengl_enabled(self, enabled: bool) -> None:
+        """Enable/disable the OpenGL toggle if support is unavailable."""
+        self.opengl_checkbox.setEnabled(enabled)
+
     def set_numba_callback(self, callback: Callable[[bool], None]) -> None:
         """Set callback for numba acceleration toggle."""
         self.numba_callback = callback
 
+    def set_opengl_callback(self, callback: Callable[[bool], None]) -> None:
+        """Set callback for OpenGL renderer toggle."""
+        self.opengl_callback = callback
+
     def _on_numba_changed(self, state: int) -> None:
         """Handle numba checkbox state change."""
         self.numba_callback(state == QtCore.Qt.CheckState.Checked.value)
+
+    def _on_opengl_changed(self, state: int) -> None:
+        """Handle OpenGL checkbox state change."""
+        self.opengl_callback(state == QtCore.Qt.CheckState.Checked.value)
 
     def set_simulation_running(self, running: bool) -> None:
         """Enable or disable controls that should not be changed during simulation."""
