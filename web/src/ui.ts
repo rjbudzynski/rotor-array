@@ -467,16 +467,13 @@ export class OrderPlot {
       this.startIdx > MAX_DEAD_ELEMENTS ||
       this.startIdx > times.length * COMPACTION_WASTE_THRESHOLD
     ) {
-      this.data[0] = times.slice(this.startIdx);
-      this.data[1] = this.data[1].slice(this.startIdx);
+      this.data[0].splice(0, this.startIdx);
+      this.data[1].splice(0, this.startIdx);
       this.startIdx = 0;
     }
 
-    // Pass sliced view to uPlot (efficient, no copy)
-    this.uplot.setData([
-      this.data[0].slice(this.startIdx),
-      this.data[1].slice(this.startIdx),
-    ]);
+    // Pass full arrays to uPlot and rely on scale to window view
+    this.uplot.setData(this.data);
 
     // Sliding window logic: [0, windowSeconds] or [t-windowSeconds, t]
     if (t > this.windowSeconds) {
