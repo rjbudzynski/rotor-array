@@ -78,6 +78,16 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
 
         self.set_l_side(l_side)
 
+    def resizeEvent(self, ev: QtGui.QResizeEvent | None) -> None:  # noqa: N802
+        """Ensure plot fills the smaller dimension, matching OpenGL behavior."""
+        super().resizeEvent(ev)
+        # Get the view box and lock it to a square aspect ratio that fills the widget
+        # (skip if plot not yet initialized during __init__)
+        if hasattr(self, "plot") and self.plot is not None:
+            vb = self.plot.getViewBox()
+            if vb is not None:
+                vb.setAspectLocked(True, ratio=1.0)
+
     def toggle_arrows(self, show: bool) -> None:
         """Toggle arrow overlay visibility.
 
@@ -127,9 +137,10 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         painter = QtGui.QPainter(image)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
-        # White pen for arrows, 1 pixel width
+        # White pen for arrows, thickness proportional to upsample (matches OpenGL ~0.015)
         pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 220))
-        pen.setWidth(1)
+        arrow_thickness = max(1, int(0.015 * s))
+        pen.setWidth(arrow_thickness)
         painter.setPen(pen)
 
         # Center of each disc in pixels
