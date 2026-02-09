@@ -23,6 +23,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class SquareWidget(QtWidgets.QWidget):
+    """A widget that maintains a square aspect ratio."""
+
+    def __init__(self, child: QtWidgets.QWidget, parent: QtWidgets.QWidget | None = None):
+        super().__init__(parent)
+        self._child = child
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(child, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:  # noqa: N802
+        """Maintain square aspect ratio by constraining the child widget."""
+        super().resizeEvent(a0)
+        size = min(self.width(), self.height())
+        self._child.setFixedSize(size, size)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """
     Main window for the Rotor Array simulation application.
@@ -62,7 +79,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.main_layout.addWidget(self.info_panel, stretch=1)
 
         self.visualizer = self._build_visualizer()
-        self.main_layout.addWidget(self.visualizer, stretch=4)
+        self.visualizer_container = SquareWidget(self.visualizer)
+        self.main_layout.addWidget(self.visualizer_container, stretch=4)
 
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
@@ -126,11 +144,22 @@ class MainWindow(QtWidgets.QMainWindow):
         return RotorArrayVisualizer(self.l_side)
 
     def _replace_visualizer(self) -> None:
-        self.main_layout.removeWidget(self.visualizer)
+        # Remove old visualizer from container
         self.visualizer.setParent(None)
         self.visualizer.deleteLater()
+        # Create new visualizer and add to container
         self.visualizer = self._build_visualizer()
-        self.main_layout.insertWidget(1, self.visualizer, stretch=4)
+        layout = self.visualizer_container.layout()
+        if layout is not None:
+            # Clear old widget from layout
+            while layout.count() > 0:
+                item = layout.takeAt(0)
+                if item is not None:
+                    widget = item.widget()
+                    if widget is not None:
+                        widget.setParent(None)
+            layout.addWidget(self.visualizer)
+            self.visualizer_container.resizeEvent(None)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
 
     def get_initial_state(self) -> np.ndarray:
