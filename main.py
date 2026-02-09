@@ -47,6 +47,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dt = 0.02
         self.time_scale = 1.0
         self.order_history: deque[tuple[float, float]] = deque()
+        self._last_info_update_t = 0.0
 
         # UI
         self.central_widget = QtWidgets.QWidget()
@@ -212,6 +213,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.engine.set_state(self.y0)
         self.order_history.clear()
+        self._last_info_update_t = self.engine.t
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
 
@@ -241,15 +243,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 # Update visualization
                 self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
-                self.update_energy_display()
 
-                # Update mean direction visualizer
-                self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+                # Throttle info panel updates to 10 Hz
+                if self.engine.t - self._last_info_update_t >= 0.1:
+                    self._last_info_update_t = self.engine.t
+                    self.update_energy_display()
 
-                # Update order parameter plot
-                times = [h[0] for h in self.order_history]
-                values = [h[1] for h in self.order_history]
-                self.info_panel.update_order_plot(times, values)
+                    # Update mean direction visualizer
+                    self.info_panel.mean_dir_visualizer.update_state(
+                        op.r, op.mean_cos, op.mean_sin
+                    )
+
+                    # Update order parameter plot
+                    times = [h[0] for h in self.order_history]
+                    values = [h[1] for h in self.order_history]
+                    self.info_panel.update_order_plot(times, values)
         except ValueError as e:
             # Simulation parameter error
             logger.error(f"Simulation error: {e}")

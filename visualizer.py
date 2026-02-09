@@ -200,6 +200,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         total_size = l_side * s
         self.rgba_buffer = np.zeros((total_size, total_size, 4), dtype=np.uint8)
         self.rgba_buffer[..., 3] = self.alpha_mask
+        self._rgb_block_view = self.rgba_buffer[..., :3].reshape(l_side, s, l_side, s, 3)
 
         # Center the image
         if not hasattr(self, "img") or self.img is None:
@@ -254,15 +255,11 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         # Reshape to (Y, X, 3) since theta is row-major
         rgb_2d = rgb.reshape(self.l_side, self.l_side, 3)
 
-        # Upsample using repeat
+        # Upsample without allocating large temporaries:
+        # buffer is (X_up, Y_up, 3), so fill [x, y] blocks from rgb_2d[y, x].
         s = self._upsample
-        rgb_up = rgb_2d.repeat(s, axis=0).repeat(s, axis=1)
-
-        # Transpose to (X_up, Y_up) for ImageItem col-major
-        rgb_final = rgb_up.transpose(1, 0, 2)
-
-        # Update buffer
-        self.rgba_buffer[..., :3] = rgb_final
+        rgb_xy = rgb_2d.transpose(1, 0, 2)
+        self._rgb_block_view[:, :, :, :, :] = rgb_xy[:, None, :, None, :]
         self.img.setImage(self.rgba_buffer, autoLevels=False)
 
         # Cache theta and update arrows only when visible
