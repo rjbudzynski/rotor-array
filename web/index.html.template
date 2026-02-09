@@ -79,12 +79,19 @@
                             <li><strong>Random Angles</strong>: High entropy start.</li>
                             <li><strong>Twisted</strong>: Topological winding state. Use <strong>Winding (k)</strong> to set full rotations.</li>
                             <li><strong>Domain Wall</strong>: Split configuration (left/right).</li>
+                            <li><strong>Pi/2 Domain Wall</strong>: Split configuration with &plusmn;&pi;/2 regions.</li>
+                            <li><strong>Vortex Band</strong>: Phase wraps across a band; use <strong>Wraps (k)</strong>, <strong>Width (w)</strong>, and <strong>Shift (&delta;&phi;)</strong>.</li>
+                            <li><strong>Cross Domain</strong>: Quadrant-style phase domains.</li>
                             <li><strong>Vortex Pair</strong>: Opposite topological charges.</li>
                             <li><strong>Skyrmion</strong>: Localized phase twist.</li>
+                            <li><strong>Single Kick</strong>: Gaussian velocity kick at the center.</li>
                             <li><strong>Thermalized</strong>: Random velocities assigned to rotors.</li>
                         </ul>
                     </li>
                     <li><strong>Coupling (J)</strong> &amp; <strong>Field (M)</strong>: Real-time sliders for interaction and field strength.</li>
+                    <li><strong>Time Scale</strong>: Simulation speed multiplier.</li>
+                    <li><strong>Initial Temp (T)</strong>: Adds thermal noise to initial velocities.</li>
+                    <li><strong>Show Arrows</strong>: Toggle rotor direction arrows when zoomed in.</li>
                 </ul>
                 
                 <p><strong>Controls &amp; Monitors</strong></p>
@@ -92,6 +99,8 @@
                     <li><strong>Start/Stop</strong>: Runs or pauses the integration.</li>
                     <li><strong>Apply</strong>: Applies current settings and restarts the simulation.</li>
                     <li><strong>Order Parameter Plot</strong>: Shows the history of system synchronization.</li>
+                    <li><strong>Mean Direction</strong>: Shows the current average rotor direction.</li>
+                    <li><strong>Energy (per rotor)</strong> and <strong>dE/E0</strong>: Track energy and relative drift.</li>
                 </ul>
 
                 <h3>Visualization</h3>
