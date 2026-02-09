@@ -1,5 +1,43 @@
 import numpy as np
 
+try:
+    import numba as nb
+except Exception:  # pragma: no cover - optional dependency
+    nb = None
+
+
+def _build_numba_kernel():
+    if nb is None:
+        return None
+
+    @nb.njit(cache=True, fastmath=True, parallel=True)
+    def accel_kernel(theta: np.ndarray, l_side: int, j: float, m: float, out: np.ndarray) -> None:
+        theta_2d = theta.reshape((l_side, l_side))
+        out_2d = out.reshape((l_side, l_side))
+        for r in nb.prange(l_side):
+            r_up = r - 1 if r > 0 else l_side - 1
+            r_dn = r + 1 if r + 1 < l_side else 0
+            for c in range(l_side):
+                c_lt = c - 1 if c > 0 else l_side - 1
+                c_rt = c + 1 if c + 1 < l_side else 0
+                theta_rc = theta_2d[r, c]
+                force = (
+                    np.sin(theta_rc - theta_2d[r, c_rt])
+                    + np.sin(theta_rc - theta_2d[r, c_lt])
+                    + np.sin(theta_rc - theta_2d[r_dn, c])
+                    + np.sin(theta_rc - theta_2d[r_up, c])
+                )
+                accel = -j * force
+                if m != 0.0:
+                    accel -= m * np.sin(theta_rc)
+                out_2d[r, c] = accel
+
+    return accel_kernel
+
+
+_ACCEL_KERNEL = _build_numba_kernel()
+NUMBA_AVAILABLE = _ACCEL_KERNEL is not None
+
 
 class SimulationParams:
     """Parameters for the rotor array simulation."""
@@ -31,9 +69,14 @@ class RotorArray:
     Represents an L x L array of coupled planar rotors on a square lattice.
     """
 
-    def __init__(self, params: SimulationParams):
+    def __init__(self, params: SimulationParams, use_numba: bool = False):
         validate_params(params.l_side, params.j_coupling, params.m_field)
         self.params = params
+        self.use_numba = use_numba
+        self._accel_buf: np.ndarray | None = None
+
+        if self.use_numba and _ACCEL_KERNEL is None:
+            raise ImportError("numba is not available; install numba to enable use_numba.")
 
     def get_acceleration(self, theta: np.ndarray) -> np.ndarray:
         expected_n = self.params.n_rotors
@@ -43,6 +86,13 @@ class RotorArray:
         l_side = self.params.l_side
         j = self.params.j_coupling
         m = self.params.m_field
+
+        if self.use_numba:
+            if self._accel_buf is None or self._accel_buf.size != theta.size:
+                self._accel_buf = np.empty_like(theta)
+            _ACCEL_KERNEL(theta, l_side, j, m, self._accel_buf)
+            return self._accel_buf
+
         theta_2d = theta.reshape(l_side, l_side)
 
         diff_h = theta_2d - np.roll(theta_2d, -1, axis=1)
@@ -99,9 +149,10 @@ class OrderParameter:
 
 
 class SimulationEngine:
-    def __init__(self, params: SimulationParams):
+    def __init__(self, params: SimulationParams, use_numba: bool = False):
         self.params = params
-        self.array = RotorArray(params)
+        self.use_numba = use_numba
+        self.array = RotorArray(params, use_numba=use_numba)
         self.y = np.zeros(2 * params.n_rotors)
         self.t = 0.0
         self.adaptive_substepping = True

@@ -8,7 +8,7 @@ import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from presets import generate_initial_state
-from simulation import SimulationEngine, SimulationParams
+from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
 from ui import ControlPanel, InfoPanel
 from visualizer import RotorArrayVisualizer
 
@@ -38,9 +38,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.l_side = l_side
         self.j_coupling = 1.0
         self.m_field = 0.0
+        self.use_numba = False
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
-        self.engine = SimulationEngine(params)
+        self.engine = SimulationEngine(params, use_numba=self.use_numba)
 
         # UI State
         self.dt = 0.02
@@ -60,6 +61,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
+        self.controls.set_numba_enabled(NUMBA_AVAILABLE)
+        self.controls.set_numba_checked(self.use_numba and NUMBA_AVAILABLE)
         self.main_layout.addWidget(self.controls, stretch=1)
 
         # Connect controls
@@ -77,10 +80,10 @@ class MainWindow(QtWidgets.QMainWindow):
             trigger.connect(lambda _: self.reinit_simulation(self.l_side))
 
         self.controls.set_j_callback(self.update_j)
-
         self.controls.set_m_callback(self.update_m)
         self.controls.set_time_callback(self.update_time_scale)
         self.controls.set_arrows_callback(self.toggle_arrows)
+        self.controls.set_numba_callback(self.update_numba)
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
         self.controls.help_button.clicked.connect(self.show_help)
@@ -122,7 +125,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Re-initialize the simulation with a new lattice size or preset."""
         self.l_side = l_side
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
-        self.engine = SimulationEngine(params)
+        self.engine = SimulationEngine(params, use_numba=self.use_numba)
 
         # Reset state based on current preset
         self.y0 = self.get_initial_state()
@@ -157,6 +160,13 @@ class MainWindow(QtWidgets.QMainWindow):
             show: True to show arrows, False to hide.
         """
         self.visualizer.toggle_arrows(show)
+
+    def update_numba(self, enabled: bool):
+        if enabled and not NUMBA_AVAILABLE:
+            self.controls.set_numba_checked(False)
+            return
+        self.use_numba = enabled
+        self.reinit_simulation(self.l_side)
 
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)

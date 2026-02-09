@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from simulation import RotorArray, SimulationEngine, SimulationParams
 
@@ -23,6 +24,30 @@ def test_energy_conservation():
     for _ in range(50):
         engine.step(0.1)
         # Energy should be conserved to within integrator tolerance
+        assert np.isclose(engine.get_energy(), initial_energy, rtol=1e-5)
+
+
+def test_energy_conservation_numba():
+    """Verify that energy is conserved with numba acceleration when M=0."""
+    from simulation import NUMBA_AVAILABLE
+
+    if not NUMBA_AVAILABLE:
+        pytest.skip("numba not available")
+
+    l_side = 4
+    params = SimulationParams(l_side=l_side, j_coupling=1.0, m_field=0.0)
+    engine = SimulationEngine(params, use_numba=True)
+
+    n = params.n_rotors
+    y0 = np.zeros(2 * n)
+    y0[0] = np.pi - 0.01
+    engine.set_state(y0)
+    engine.substeps = 50
+
+    initial_energy = engine.get_energy()
+
+    for _ in range(50):
+        engine.step(0.1)
         assert np.isclose(engine.get_energy(), initial_energy, rtol=1e-5)
 
 
