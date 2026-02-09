@@ -33,11 +33,17 @@ class SquareWidget(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(child, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
 
+    def set_child(self, child: QtWidgets.QWidget) -> None:
+        """Update the child widget reference."""
+        self._child = child
+
     def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:  # noqa: N802
         """Maintain square aspect ratio by constraining the child widget."""
         super().resizeEvent(a0)
-        size = min(self.width(), self.height())
-        self._child.setFixedSize(size, size)
+        # Check if child is still valid (not deleted during visualizer replacement)
+        if self._child is not None and self._child.parent() is not None:
+            size = min(self.width(), self.height())
+            self._child.setFixedSize(size, size)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -159,6 +165,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     if widget is not None:
                         widget.setParent(None)
             layout.addWidget(self.visualizer)
+            self.visualizer_container.set_child(self.visualizer)
             self.visualizer_container.resizeEvent(None)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
 
