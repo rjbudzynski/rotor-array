@@ -10,7 +10,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from presets import generate_initial_state
 from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
 from ui import ControlPanel, InfoPanel
-from visualizer import OPENGL_AVAILABLE, RotorArrayVisualizer
+from visualizer import OPENGL_AVAILABLE, RotorArrayGLVisualizer, RotorArrayVisualizer
 if OPENGL_AVAILABLE:
     from visualizer import RotorArrayGLVisualizer
 

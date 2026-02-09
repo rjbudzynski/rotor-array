@@ -3,15 +3,17 @@ from typing import Any, cast
 import numpy as np
 import pyqtgraph as pg
 from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
+from PyQt6.QtOpenGL import QOpenGLShader, QOpenGLShaderProgram
 
 from colors import hsv_to_rgb_array, omega_to_value, theta_to_hue
 
 try:
-    import pyqtgraph.opengl as gl
+    from OpenGL import GL as ogl
 except Exception:  # pragma: no cover - optional dependency
-    gl = None
+    ogl = None
 
-OPENGL_AVAILABLE = gl is not None
+OPENGL_AVAILABLE = ogl is not None
 
 
 class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
@@ -277,11 +279,11 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             self._theta_cache = None
 
 
-if gl is not None:
+if ogl is not None:
 
-    class RotorArrayGLVisualizer(gl.GLViewWidget):
+    class RotorArrayGLVisualizer(QOpenGLWidget):
         """
-        OpenGL-based visualizer using GLImageItem for higher throughput at large L.
+        OpenGL-based visualizer using a shader to map theta/omega to color on-GPU.
         """
 
         ARROW_THRESHOLD = 60
@@ -290,66 +292,285 @@ if gl is not None:
             super().__init__(parent=parent)
             self.l_side = l_side
             self.n_rotors = l_side**2
-            self._upsample = RotorArrayVisualizer._calculate_upsample(l_side)
-            self._rgb_block_view: np.ndarray | None = None
+            self._theta = np.zeros(self.n_rotors, dtype=np.float32)
+            self._omega = np.zeros(self.n_rotors, dtype=np.float32)
+            self._textures_dirty = True
 
-            self.setBackgroundColor("k")
-            self.setCameraPosition(distance=5.0, elevation=90, azimuth=0)
-
-            self.img = gl.GLImageItem(np.zeros((1, 1, 4), dtype=np.uint8))
-            self.addItem(self.img)
-            self.set_l_side(l_side)
+            self._program: QOpenGLShaderProgram | None = None
+            self._vbo = None
+            self._vbo_stride = 0
+            self._theta_tex = None
+            self._omega_tex = None
+            self._tex_l_side: int | None = None
 
         def toggle_arrows(self, show: bool) -> None:
-            # No arrow overlay in OpenGL path (yet).
+            # No arrow overlay in shader path (yet).
             return
 
         def set_l_side(self, l_side: int) -> None:
             self.l_side = l_side
             self.n_rotors = l_side**2
-
-            s = RotorArrayVisualizer._calculate_upsample(l_side)
-            self._upsample = s
-            total_size = l_side * s
-
-            y, x = np.ogrid[:s, :s]
-            center = (s - 1) / 2.0
-            dist = np.sqrt((x - center) ** 2 + (y - center) ** 2)
-            radius = 0.45 * s
-            mask_f = np.clip(radius + 0.5 - dist, 0, 1)
-            mask = (mask_f * 255).astype(np.uint8)
-            alpha_mask = np.tile(mask, (l_side, l_side))
-
-            self.rgba_buffer = np.zeros((total_size, total_size, 4), dtype=np.uint8)
-            self.rgba_buffer[..., 3] = alpha_mask
-            self._rgb_block_view = self.rgba_buffer[..., :3].reshape(l_side, s, l_side, s, 3)
-
-            self.img.setData(self.rgba_buffer)
-            self.img.resetTransform()
-            self.img.translate(-0.5, -0.5, 0)
-            self.img.scale(1.0 / s, 1.0 / s, 1.0)
-            self.opts["center"] = QtGui.QVector3D(
-                (l_side - 1) / 2.0, (l_side - 1) / 2.0, 0
-            )
-            # Ensure the grid stays within view (avoid edge clipping at large L).
-            self.setCameraPosition(
-                distance=max(5.0, l_side * 1.0),
-                elevation=90,
-                azimuth=0,
-            )
+            self._theta = np.zeros(self.n_rotors, dtype=np.float32)
+            self._omega = np.zeros(self.n_rotors, dtype=np.float32)
+            self._textures_dirty = True
+            self._tex_l_side = None
+            self.update()
 
         def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
             if len(theta) != self.n_rotors:
                 return
-            if self._rgb_block_view is None:
+            self._theta = theta.astype(np.float32, copy=False)
+            self._omega = omega.astype(np.float32, copy=False)
+            self._textures_dirty = True
+            self.update()
+
+        def initializeGL(self) -> None:  # noqa: N802
+            ogl.glEnable(ogl.GL_BLEND)
+            ogl.glBlendFunc(ogl.GL_SRC_ALPHA, ogl.GL_ONE_MINUS_SRC_ALPHA)
+
+            vertex_src = """
+            #version 120
+            attribute vec2 a_pos;
+            attribute vec2 a_uv;
+            varying vec2 v_uv;
+            void main() {
+                gl_Position = vec4(a_pos, 0.0, 1.0);
+                v_uv = vec2(a_uv.x, 1.0 - a_uv.y);
+            }
+            """
+            fragment_src = """
+            #version 120
+            varying vec2 v_uv;
+            uniform sampler2D u_theta;
+            uniform sampler2D u_omega;
+            uniform float u_L;
+            uniform float u_radius;
+            uniform float u_edge;
+            uniform float u_val_min;
+            uniform float u_val_max;
+            uniform float u_omega_max;
+
+            vec3 hsv2rgb(vec3 c) {
+                vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+            }
+
+            float tanh_approx(float x) {
+                float e2x = exp(2.0 * x);
+                return (e2x - 1.0) / (e2x + 1.0);
+            }
+
+            void main() {
+                vec2 grid = v_uv * u_L;
+                vec2 cell = floor(grid);
+                vec2 local = fract(grid) - vec2(0.5);
+                float dist = length(local);
+                float alpha = 1.0 - smoothstep(u_radius - u_edge, u_radius, dist);
+                if (alpha <= 0.0) {
+                    discard;
+                }
+                vec2 sample_uv = (cell + vec2(0.5)) / u_L;
+                float theta = texture2D(u_theta, sample_uv).r;
+                float omega = texture2D(u_omega, sample_uv).r;
+
+                // Decode from [0,1]
+                float theta_val = theta * 6.28318530718 - 3.14159265359;
+                float omega_val = (omega - 0.5) * (2.0 * u_omega_max);
+
+                float hue = mod(theta_val, 6.28318530718) / 6.28318530718;
+                float energy = omega_val * omega_val;
+                float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
+                vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+                gl_FragColor = vec4(rgb, alpha);
+            }
+            """
+
+            program = QOpenGLShaderProgram()
+            program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex_src)
+            program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment_src)
+            program.bindAttributeLocation("a_pos", 0)
+            program.bindAttributeLocation("a_uv", 1)
+            program.link()
+            self._program = program
+
+            # Full-screen quad (two triangles)
+            verts = np.array(
+                [
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    -1.0,
+                    1.0,
+                    0.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    -1.0,
+                    1.0,
+                    0.0,
+                    1.0,
+                ],
+                dtype=np.float32,
+            )
+
+            self._vbo = ogl.glGenBuffers(1)
+            ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, self._vbo)
+            ogl.glBufferData(ogl.GL_ARRAY_BUFFER, verts.nbytes, verts, ogl.GL_STATIC_DRAW)
+
+            stride = 4 * 4
+            self._vbo_stride = stride
+            ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, 0)
+
+            self._theta_tex = ogl.glGenTextures(1)
+            self._omega_tex = ogl.glGenTextures(1)
+            self._init_textures()
+
+        def _init_textures(self) -> None:
+            if self._theta_tex is None or self._omega_tex is None:
                 return
+            for tex in (self._theta_tex, self._omega_tex):
+                ogl.glBindTexture(ogl.GL_TEXTURE_2D, tex)
+                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MIN_FILTER, ogl.GL_NEAREST)
+                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MAG_FILTER, ogl.GL_NEAREST)
+                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_S, ogl.GL_CLAMP_TO_EDGE)
+                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_T, ogl.GL_CLAMP_TO_EDGE)
+                ogl.glTexImage2D(
+                    ogl.GL_TEXTURE_2D,
+                    0,
+                    ogl.GL_RGB,
+                    self.l_side,
+                    self.l_side,
+                    0,
+                    ogl.GL_RGB,
+                    ogl.GL_UNSIGNED_BYTE,
+                    None,
+                )
+            ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
+            self._textures_dirty = True
+            self._tex_l_side = self.l_side
 
-            hues = theta_to_hue(theta)
-            vals = omega_to_value(omega**2)
-            sats = np.ones_like(hues)
-            rgb = hsv_to_rgb_array(hues, sats, vals)
-            rgb_2d = rgb.reshape(self.l_side, self.l_side, 3)
-            rgb_xy = rgb_2d.transpose(1, 0, 2)
-            self._rgb_block_view[:, :, :, :, :] = rgb_xy[:, None, :, None, :]
+        def resizeGL(self, w: int, h: int) -> None:  # noqa: N802
+            dpr = self.devicePixelRatioF()
+            w_px = int(w * dpr)
+            h_px = int(h * dpr)
+            size = min(w_px, h_px)
+            x = (w_px - size) // 2
+            y = (h_px - size) // 2
+            ogl.glViewport(x, y, size, size)
 
-            self.img.setData(self.rgba_buffer)
+        def _upload_textures(self) -> None:
+            if self._theta_tex is None or self._omega_tex is None:
+                return
+            # Pack to 8-bit RGB for broader GL compatibility.
+            # theta in [-pi, pi] -> [0, 255] in R channel
+            theta_norm = (self._theta + np.pi) / (2.0 * np.pi)
+            theta_u8 = np.clip(theta_norm * 255.0, 0.0, 255.0).astype(np.uint8)
+            # omega in [-omega_max, omega_max] -> [0, 255] in R channel
+            omega_max = 8.0
+            omega_norm = (self._omega / (2.0 * omega_max)) + 0.5
+            omega_u8 = np.clip(omega_norm * 255.0, 0.0, 255.0).astype(np.uint8)
+
+            theta_rgb = np.zeros((self.n_rotors, 3), dtype=np.uint8)
+            theta_rgb[:, 0] = theta_u8
+            omega_rgb = np.zeros((self.n_rotors, 3), dtype=np.uint8)
+            omega_rgb[:, 0] = omega_u8
+
+            theta_2d = np.ascontiguousarray(
+                theta_rgb.reshape(self.l_side, self.l_side, 3), dtype=np.uint8
+            )
+            omega_2d = np.ascontiguousarray(
+                omega_rgb.reshape(self.l_side, self.l_side, 3), dtype=np.uint8
+            )
+
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)
+            ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
+            ogl.glTexSubImage2D(
+                ogl.GL_TEXTURE_2D,
+                0,
+                0,
+                0,
+                self.l_side,
+                self.l_side,
+                ogl.GL_RGB,
+                ogl.GL_UNSIGNED_BYTE,
+                theta_2d,
+            )
+
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._omega_tex)
+            ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
+            ogl.glTexSubImage2D(
+                ogl.GL_TEXTURE_2D,
+                0,
+                0,
+                0,
+                self.l_side,
+                self.l_side,
+                ogl.GL_RGB,
+                ogl.GL_UNSIGNED_BYTE,
+                omega_2d,
+            )
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
+            self._textures_dirty = False
+
+        def paintGL(self) -> None:  # noqa: N802
+            if self._program is None or self._vbo is None:
+                return
+            # Ensure square viewport even if resizeGL wasn't called (HiDPI / initial draw).
+            dpr = self.devicePixelRatioF()
+            w_px = int(self.width() * dpr)
+            h_px = int(self.height() * dpr)
+            size = min(w_px, h_px)
+            x = (w_px - size) // 2
+            y = (h_px - size) // 2
+            ogl.glViewport(x, y, size, size)
+            if self._tex_l_side != self.l_side:
+                self._init_textures()
+            if self._textures_dirty:
+                self._upload_textures()
+
+            ogl.glClearColor(0.0, 0.0, 0.0, 1.0)
+            ogl.glClear(ogl.GL_COLOR_BUFFER_BIT)
+
+            self._program.bind()
+            self._program.setUniformValue("u_L", float(self.l_side))
+            self._program.setUniformValue("u_radius", 0.45)
+            self._program.setUniformValue("u_edge", 0.05)
+            self._program.setUniformValue("u_val_min", 0.2)
+            self._program.setUniformValue("u_val_max", 0.8)
+            self._program.setUniformValue("u_omega_max", 8.0)
+
+            ogl.glActiveTexture(ogl.GL_TEXTURE0)
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)
+            self._program.setUniformValue("u_theta", 0)
+
+            ogl.glActiveTexture(ogl.GL_TEXTURE1)
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._omega_tex)
+            self._program.setUniformValue("u_omega", 1)
+
+            ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, self._vbo)
+            from ctypes import c_void_p
+
+            ogl.glEnableVertexAttribArray(0)
+            ogl.glVertexAttribPointer(0, 2, ogl.GL_FLOAT, False, self._vbo_stride, c_void_p(0))
+            ogl.glEnableVertexAttribArray(1)
+            ogl.glVertexAttribPointer(1, 2, ogl.GL_FLOAT, False, self._vbo_stride, c_void_p(8))
+            ogl.glDrawArrays(ogl.GL_TRIANGLES, 0, 6)
+            ogl.glDisableVertexAttribArray(0)
+            ogl.glDisableVertexAttribArray(1)
+            ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, 0)
+
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
+            self._program.release()
