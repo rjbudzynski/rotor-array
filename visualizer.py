@@ -338,7 +338,7 @@ if ogl is not None:
             varying vec2 v_uv;
             void main() {
                 gl_Position = vec4(a_pos, 0.0, 1.0);
-                v_uv = vec2(a_uv.x, 1.0 - a_uv.y);
+                v_uv = a_uv;
             }
             """
             fragment_src = """
@@ -384,8 +384,8 @@ if ogl is not None:
                 float theta_val = theta * 6.28318530718 - 3.14159265359;
                 float omega_val = (omega - 0.5) * (2.0 * u_omega_max);
 
-                // Rotate by -pi/6 so blue points down (theta=3*pi/2 -> hue=2/3)
-float hue = mod(theta_val - 0.5235987756, 6.28318530718) / 6.28318530718;
+                // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
+float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
                 float energy = omega_val * omega_val;
                 float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
                 vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
