@@ -110,6 +110,11 @@ class SimulationEngine:
         self._accel: np.ndarray | None = None
 
     def set_state(self, y: np.ndarray, t: float = 0.0) -> None:
+        expected = 2 * self.params.n_rotors
+        if y.size != expected:
+            raise ValueError(f"state must have {expected} elements, got {y.size}")
+        if not np.all(np.isfinite(y)):
+            raise ValueError("state contains non-finite values")
         self.y = y.copy()
         self.t = float(t)
         self._accel = None
@@ -118,6 +123,7 @@ class SimulationEngine:
         l_side = self.params.l_side
         j_val = j if j is not None else self.params.j_coupling
         m_val = m if m is not None else self.params.m_field
+        validate_params(l_side=l_side, j_coupling=j_val, m_field=m_val)
         self.params = SimulationParams(l_side=l_side, j_coupling=j_val, m_field=m_val)
         self.array.params = self.params
         self._accel = None
@@ -146,6 +152,7 @@ class SimulationEngine:
             j = self.params.j_coupling
             m = self.params.m_field
             omega_max = np.sqrt(8.0 * abs(j) + abs(m) + 1e-9)
+            omega_max = max(omega_max, float(np.max(np.abs(self.omega)) + 1e-9))
             self.substeps = max(1, int(np.ceil(dt * omega_max / self.stability_factor)))
 
         sub_dt = dt / self.substeps

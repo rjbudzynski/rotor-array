@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import numpy as np
 import pyqtgraph as pg
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -48,7 +50,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self._upsample = self._calculate_upsample(l_side)
         super().__init__(parent=parent)
 
-        self.plot = self.addPlot()
+        self.plot = cast(Any, self).addPlot()
         self.plot.setAspectLocked(True)
         self.plot.showAxis("left", False)
         self.plot.showAxis("bottom", False)
@@ -146,7 +148,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         painter.end()
 
         # Convert QImage to numpy array
-        ptr = image.bits()
+        ptr = cast(Any, image.bits())
         ptr.setsize(total_size * total_size * 4)
         # QImage data is row-major: (Y, X, 4)
         arrows_buffer_yx = np.frombuffer(ptr, dtype=np.uint8).reshape(total_size, total_size, 4)
@@ -263,7 +265,9 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.rgba_buffer[..., :3] = rgb_final
         self.img.setImage(self.rgba_buffer, autoLevels=False)
 
-        # Cache theta and update arrows if visible
-        self._theta_cache = theta.copy()
+        # Cache theta and update arrows only when visible
         if self.show_arrows:
+            self._theta_cache = theta.copy()
             self._render_arrows(theta)
+        else:
+            self._theta_cache = None

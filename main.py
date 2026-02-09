@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from collections import deque
+from typing import Optional
 
 import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -49,17 +50,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # UI
         self.central_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.central_widget)
-        self.layout = QtWidgets.QHBoxLayout(self.central_widget)
+        self.main_layout = QtWidgets.QHBoxLayout(self.central_widget)
 
         self.info_panel = InfoPanel()
-        self.layout.addWidget(self.info_panel, stretch=1)
+        self.main_layout.addWidget(self.info_panel, stretch=1)
 
         self.visualizer = RotorArrayVisualizer(l_side)
-        self.layout.addWidget(self.visualizer, stretch=4)
+        self.main_layout.addWidget(self.visualizer, stretch=4)
 
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
-        self.layout.addWidget(self.controls, stretch=1)
+        self.main_layout.addWidget(self.controls, stretch=1)
 
         # Connect controls
         self.controls.l_spin.valueChanged.connect(self.reinit_simulation)
@@ -98,17 +99,9 @@ class MainWindow(QtWidgets.QMainWindow):
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
-        # Initial draw
-        self.y0 = self.get_initial_state()
-        self.engine.set_state(self.y0)
-        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
-        self.update_energy_display()
-
-        # Update mean direction visualizer
-        op = self.engine.get_order_parameter()
-        self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
-
-    def showEvent(self, event):  # noqa: N802
+    def showEvent(  # type: ignore[invalid-method-override] # noqa: N802
+        self, event: Optional[QtGui.QShowEvent]
+    ) -> None:
         super().showEvent(event)
         # Re-sync the visualizer once layout is likely stable
         self.visualizer.set_l_side(self.l_side)

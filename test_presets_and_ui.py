@@ -53,7 +53,7 @@ def test_cross_domain_preset(app, qtbot):
 
 def test_vortex_pair_preset(app, qtbot):
     with qtbot.waitSignal(app.controls.preset_combo.currentIndexChanged):
-        app.controls.preset_combo.setCurrentIndex(5)
+        app.controls.preset_combo.setCurrentIndex(6)
 
     assert not np.allclose(app.engine.theta, 0)
     # Total topological charge should be 0

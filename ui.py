@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Any, Optional, cast
 
 import numpy as np
 import pyqtgraph as pg
@@ -43,7 +44,7 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         # Set background to None for transparency
         self.setBackground(None)
 
-        self.plot = self.addPlot()
+        self.plot = cast(Any, self).addPlot()
         self.plot.setAspectLocked(True)
         self.plot.showAxis("left", False)
         self.plot.showAxis("bottom", False)
@@ -151,7 +152,9 @@ class ColorBarVisualizer(QtWidgets.QWidget):
             self.setFixedHeight(12)
             self.color_func = color_func
 
-        def paintEvent(self, event: QtGui.QPaintEvent) -> None:  # noqa: N802
+        def paintEvent(  # type: ignore[invalid-method-override] # noqa: N802
+            self, event: Optional[QtGui.QPaintEvent]
+        ) -> None:
             painter = QtGui.QPainter(self)
             width = self.width()
             height = self.height()
@@ -218,7 +221,7 @@ class InfoPanel(QtWidgets.QWidget):
         self.order_plot.setBackground("k")
         self.order_plot.showGrid(x=True, y=True, alpha=0.3)
         self.order_plot.setYRange(0, 1.05)
-        self.order_plot.setXRange(0, 10, padding=0)
+        cast(Any, self.order_plot).setXRange(0, 10, padding=0)
         self.order_plot.setFixedHeight(150)
 
         # Configure axes
@@ -240,11 +243,11 @@ class InfoPanel(QtWidgets.QWidget):
         if times:
             t_now = times[-1]
             if t_now > 10:
-                self.order_plot.setXRange(t_now - 10, t_now, padding=0)
+                cast(Any, self.order_plot).setXRange(t_now - 10, t_now, padding=0)
             else:
-                self.order_plot.setXRange(0, 10, padding=0)
+                cast(Any, self.order_plot).setXRange(0, 10, padding=0)
         else:
-            self.order_plot.setXRange(0, 10, padding=0)
+            cast(Any, self.order_plot).setXRange(0, 10, padding=0)
 
 
 class ControlPanel(QtWidgets.QWidget):
