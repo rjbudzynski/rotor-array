@@ -384,7 +384,8 @@ if ogl is not None:
                 float theta_val = theta * 6.28318530718 - 3.14159265359;
                 float omega_val = (omega - 0.5) * (2.0 * u_omega_max);
 
-                float hue = mod(theta_val, 6.28318530718) / 6.28318530718;
+                // Rotate by -pi/6 so blue points down (theta=3*pi/2 -> hue=2/3)
+float hue = mod(theta_val - 0.5235987756, 6.28318530718) / 6.28318530718;
                 float energy = omega_val * omega_val;
                 float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
                 vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));

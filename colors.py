@@ -5,9 +5,11 @@ def theta_to_hue(theta: np.ndarray) -> np.ndarray:
     """
     Map angles in radians to HSV hues in [0, 1].
 
-    Standard mapping: 0 radians -> 0 hue (red).
+    Rotated mapping: blue points down (aligned with external field).
+    theta=0 (right) -> magenta, theta=3*pi/2 (down) -> blue.
     """
-    return (theta % (2 * np.pi)) / (2 * np.pi)
+    # Rotate by -pi/6 so that theta=3*pi/2 (down) maps to hue=2/3 (blue)
+    return ((theta - np.pi / 6) % (2 * np.pi)) / (2 * np.pi)
 
 
 def omega_to_value(omega_sq: np.ndarray, val_min: float = 0.2, val_max: float = 0.8) -> np.ndarray:

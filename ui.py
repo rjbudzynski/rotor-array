@@ -166,7 +166,11 @@ class ColorBarVisualizer(QtWidgets.QWidget):
                 painter.drawLine(x, 0, x, height)
 
     def _get_angle_colors(self, n: int) -> list[QtGui.QColor]:
+        # Rotate hues so blue points down (aligned with external field)
+        # theta=0 (right) -> magenta, theta=3*pi/2 (down) -> blue
         hues = np.linspace(0, 1, n)
+        # Apply same -pi/6 rotation as theta_to_hue: shift by -1/12
+        hues = (hues - 1.0 / 12.0) % 1.0
         colors = []
         for h in hues:
             colors.append(QtGui.QColor.fromHsvF(float(h), 1.0, 0.8))
