@@ -331,7 +331,12 @@ if gl is not None:
             self.opts["center"] = QtGui.QVector3D(
                 (l_side - 1) / 2.0, (l_side - 1) / 2.0, 0
             )
-            self.setCameraPosition(distance=max(5.0, l_side / 2.0), elevation=90, azimuth=0)
+            # Ensure the grid stays within view (avoid edge clipping at large L).
+            self.setCameraPosition(
+                distance=max(5.0, l_side * 1.0),
+                elevation=90,
+                azimuth=0,
+            )
 
         def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
             if len(theta) != self.n_rotors:
