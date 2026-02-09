@@ -295,6 +295,7 @@ if ogl is not None:
             self._theta = np.zeros(self.n_rotors, dtype=np.float32)
             self._omega = np.zeros(self.n_rotors, dtype=np.float32)
             self._textures_dirty = True
+            self._show_arrows = False
 
             self._program: QOpenGLShaderProgram | None = None
             self._vbo = None
@@ -304,8 +305,8 @@ if ogl is not None:
             self._tex_l_side: int | None = None
 
         def toggle_arrows(self, show: bool) -> None:
-            # No arrow overlay in shader path (yet).
-            return
+            self._show_arrows = show and (self.l_side <= self.ARROW_THRESHOLD)
+            self.update()
 
         def set_l_side(self, l_side: int) -> None:
             self.l_side = l_side
@@ -314,6 +315,8 @@ if ogl is not None:
             self._omega = np.zeros(self.n_rotors, dtype=np.float32)
             self._textures_dirty = True
             self._tex_l_side = None
+            if self._show_arrows and self.l_side > self.ARROW_THRESHOLD:
+                self._show_arrows = False
             self.update()
 
         def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
@@ -349,6 +352,9 @@ if ogl is not None:
             uniform float u_val_min;
             uniform float u_val_max;
             uniform float u_omega_max;
+            uniform float u_show_arrows;
+            uniform float u_arrow_len;
+            uniform float u_arrow_thickness;
 
             vec3 hsv2rgb(vec3 c) {
                 vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
@@ -382,6 +388,16 @@ if ogl is not None:
                 float energy = omega_val * omega_val;
                 float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
                 vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+                if (u_show_arrows > 0.5) {
+                    vec2 dir = vec2(sin(theta_val), -cos(theta_val));
+                    float t = dot(local, dir);
+                    vec2 closest = dir * t;
+                    float dist_line = length(local - closest);
+                    float arrow_mask = step(0.0, t) * step(t, u_arrow_len) * step(dist_line, u_arrow_thickness);
+                    if (arrow_mask > 0.0) {
+                        rgb = mix(rgb, vec3(1.0), 0.9);
+                    }
+                }
                 gl_FragColor = vec4(rgb, alpha);
             }
             """
@@ -551,6 +567,9 @@ if ogl is not None:
             self._program.setUniformValue("u_val_min", 0.2)
             self._program.setUniformValue("u_val_max", 0.8)
             self._program.setUniformValue("u_omega_max", 8.0)
+            self._program.setUniformValue("u_show_arrows", 1.0 if self._show_arrows else 0.0)
+            self._program.setUniformValue("u_arrow_len", 0.45)
+            self._program.setUniformValue("u_arrow_thickness", 0.03)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)

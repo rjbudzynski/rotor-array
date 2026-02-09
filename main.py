@@ -197,15 +197,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.toggle_simulation(False)
 
         self.use_opengl = enabled
-        if enabled:
-            if self.controls.arrows_checkbox.isChecked():
-                self.controls.set_arrows_checked(False)
-                self.toggle_arrows(False)
-            self.controls.arrows_checkbox.setEnabled(False)
-        else:
-            self.controls.arrows_checkbox.setEnabled(True)
-
         self._replace_visualizer()
+        if enabled and self.controls.arrows_checkbox.isChecked():
+            self.toggle_arrows(True)
 
         if was_running:
             self.toggle_simulation(True)
