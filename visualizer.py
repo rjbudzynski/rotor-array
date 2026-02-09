@@ -570,7 +570,7 @@ float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
             self._program.setUniformValue("u_omega_max", 8.0)
             self._program.setUniformValue("u_show_arrows", 1.0 if self._show_arrows else 0.0)
             self._program.setUniformValue("u_arrow_len", 0.45)
-            self._program.setUniformValue("u_arrow_thickness", 0.03)
+            self._program.setUniformValue("u_arrow_thickness", 0.015)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)
