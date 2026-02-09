@@ -17,6 +17,10 @@ let engine: WasmSimulationEngine | null = null;
 let visualizer: WasmVisualizer | null = null;
 let wasmExports: WasmExports | null = null;
 let currentLSide = 0;
+const canUseOffscreenCanvas = typeof OffscreenCanvas !== "undefined";
+let offscreenCanvas: OffscreenCanvas | null = null;
+let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
+let offscreenSize = 0;
 
 let running = false;
 let timeScale = 1.0;
@@ -129,7 +133,22 @@ async function renderFrame() {
   const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
   // Create ImageBitmap for efficient transfer to main thread
-  const imageBitmap = await createImageBitmap(imageData);
+  let imageBitmap: ImageBitmap;
+  if (canUseOffscreenCanvas) {
+    if (!offscreenCanvas || offscreenSize !== canvasSize) {
+      offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
+      offscreenCtx = offscreenCanvas.getContext("2d");
+      offscreenSize = canvasSize;
+    }
+    if (offscreenCanvas && offscreenCtx) {
+      offscreenCtx.putImageData(imageData, 0, 0);
+      imageBitmap = offscreenCanvas.transferToImageBitmap();
+    } else {
+      imageBitmap = await createImageBitmap(imageData);
+    }
+  } else {
+    imageBitmap = await createImageBitmap(imageData);
+  }
 
   if (showArrows) {
     // Create or resize reusable buffers for theta/omega
