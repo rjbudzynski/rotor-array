@@ -117,6 +117,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Re-sync the visualizer once layout is likely stable
         self.visualizer.set_l_side(self.l_side)
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+        # Sync arrow state on init
+        self.toggle_arrows(self.controls.arrows_checkbox.isChecked())
 
     def _build_visualizer(self):
         if self.use_opengl and OPENGL_AVAILABLE:
