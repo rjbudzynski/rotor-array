@@ -27,6 +27,7 @@ import {
 } from "./shaders.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
+const webglCanvas = document.getElementById("webgl-canvas") as HTMLCanvasElement;
 const overlayCanvas = document.getElementById(
   "overlay-canvas",
 ) as HTMLCanvasElement;
@@ -56,7 +57,7 @@ function initWebGL(): boolean {
     maxTextureImageUnits: support.maxTextureImageUnits,
   });
 
-  webgl = initWebGL2(canvas);
+  webgl = initWebGL2(webglCanvas);
   if (!webgl) {
     console.warn("Failed to initialize WebGL2 context");
     return false;
@@ -64,7 +65,7 @@ function initWebGL(): boolean {
 
   // Setup context lost/restored handlers
   setupContextHandlers(
-    canvas,
+    webglCanvas,
     (e) => {
       console.warn("WebGL context lost");
       webglContextLost = true;
@@ -110,7 +111,7 @@ function initWebGLResources(): boolean {
   }
 
   // Initial viewport setup
-  const { width, height } = resizeCanvasToDisplaySize(canvas);
+  const { width, height } = resizeCanvasToDisplaySize(webglCanvas);
   gl.viewport(0, 0, width, height);
 
   console.log("WebGL2 initialized successfully");
@@ -126,7 +127,7 @@ function _renderTestFrame(): void {
   const { gl } = webgl;
 
   // Resize if needed
-  const { width, height } = resizeCanvasToDisplaySize(canvas);
+  const { width, height } = resizeCanvasToDisplaySize(webglCanvas);
   if (gl.canvas.width !== width || gl.canvas.height !== height) {
     gl.viewport(0, 0, width, height);
   }
@@ -181,9 +182,13 @@ const mdCanvas = document.getElementById(
 ) as HTMLCanvasElement;
 
 // Get canvas context for drawing ImageBitmap
+// Note: WebGL2 uses a separate canvas to avoid context conflicts
 const bitmapCtx = canvas.getContext("bitmaprenderer");
 const ctx2d = bitmapCtx ? null : canvas.getContext("2d");
-if (!bitmapCtx && !ctx2d) throw new Error("Failed to get canvas context");
+// Only throw if WebGL2 isn't active - if WebGL2 is initialized, we don't need these
+if (!bitmapCtx && !ctx2d && !webgl) {
+  throw new Error("Failed to get canvas context");
+}
 
 const overlayCtx = overlayCanvas.getContext("2d");
 if (!overlayCtx) throw new Error("Failed to get overlay canvas context");
