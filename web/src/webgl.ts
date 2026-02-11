@@ -358,6 +358,23 @@ export function createRotorStateTextures(
 }
 
 /**
+ * Check for WebGL errors and log them
+ */
+function checkGLError(gl: WebGL2RenderingContext, operation: string): void {
+  const error = gl.getError();
+  if (error !== gl.NO_ERROR) {
+    const errorNames: Record<number, string> = {
+      [gl.INVALID_ENUM]: "INVALID_ENUM",
+      [gl.INVALID_VALUE]: "INVALID_VALUE",
+      [gl.INVALID_OPERATION]: "INVALID_OPERATION",
+      [gl.OUT_OF_MEMORY]: "OUT_OF_MEMORY",
+      [gl.CONTEXT_LOST_WEBGL]: "CONTEXT_LOST_WEBGL",
+    };
+    console.error(`[WebGL Error] ${operation}: ${errorNames[error] || `Error ${error}`}`);
+  }
+}
+
+/**
  * Update rotor state textures with new data
  * Converts Float64Array to Float32Array for GPU upload
  */
@@ -375,12 +392,20 @@ export function updateRotorStateTextures(
     return false;
   }
 
+  // Log some sample data values
+  console.log("[Texture Upload] Sample theta values:", theta[0], theta[1], theta[2]);
+  console.log("[Texture Upload] Sample omega values:", omega[0], omega[1], omega[2]);
+  console.log("[Texture Upload] L=", lSide, "n=", n);
+
   // Convert Float64Array to Float32Array for WebGL
   const thetaF32 = new Float32Array(theta);
   const omegaF32 = new Float32Array(omega);
 
+  console.log("[Texture Upload] F32 theta samples:", thetaF32[0], thetaF32[1], thetaF32[2]);
+
   // Upload theta texture
   gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
+  checkGLError(gl, "before theta texSubImage2D");
   gl.texSubImage2D(
     gl.TEXTURE_2D,
     0,
@@ -392,9 +417,11 @@ export function updateRotorStateTextures(
     gl.FLOAT,
     thetaF32,
   );
+  checkGLError(gl, "theta texSubImage2D");
 
   // Upload omega texture
   gl.bindTexture(gl.TEXTURE_2D, omegaTexture);
+  checkGLError(gl, "before omega texSubImage2D");
   gl.texSubImage2D(
     gl.TEXTURE_2D,
     0,
@@ -406,6 +433,7 @@ export function updateRotorStateTextures(
     gl.FLOAT,
     omegaF32,
   );
+  checkGLError(gl, "omega texSubImage2D");
 
   gl.bindTexture(gl.TEXTURE_2D, null);
 
