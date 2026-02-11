@@ -49,7 +49,9 @@ uniform vec2 u_latticeSize;
 out vec4 fragColor;
 
 void main() {
-    vec2 latticeCoord = v_uv * u_latticeSize;
+    // Map v_uv [0,1] to lattice coordinates [0, L-1]
+    // Use min to prevent out-of-bounds when v_uv = 1.0
+    vec2 latticeCoord = min(v_uv * u_latticeSize, u_latticeSize - 1.0);
     ivec2 cell = ivec2(floor(latticeCoord));
     
     float theta = texelFetch(u_thetaTexture, cell, 0).r;
@@ -91,7 +93,8 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     // Calculate which rotor cell we're in
-    vec2 latticeCoord = v_uv * u_latticeSize;
+    // Use min to prevent out-of-bounds when v_uv = 1.0
+    vec2 latticeCoord = min(v_uv * u_latticeSize, u_latticeSize - 1.0);
     ivec2 cell = ivec2(floor(latticeCoord));
     
     // Sample theta and omega from textures
