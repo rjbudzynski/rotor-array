@@ -33,10 +33,11 @@ void main() {
 `;
 
 /**
- * Fragment shader placeholder for rotor visualization
- * This will be implemented in the next phase (rotor-array-g5z)
+ * Fragment shader for rotor visualization
+ * Renders anti-aliased disks with color based on angle (hue) and energy (value)
+ * Uses SDF (Signed Distance Field) for smooth edges
  */
-export const rotorFragmentShaderPlaceholder = `#version 300 es
+export const rotorFragmentShader = `#version 300 es
 
 precision highp float;
 
@@ -45,31 +46,59 @@ in vec2 v_uv;
 uniform sampler2D u_thetaTexture;
 uniform sampler2D u_omegaTexture;
 uniform vec2 u_latticeSize; // L x L
-uniform float u_upsample;
+uniform float u_upsample;   // Pixels per rotor
 
 out vec4 fragColor;
 
 // HSV to RGB conversion
 vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
 void main() {
-    // Convert UV to lattice coordinates
-    vec2 latticeCoord = v_uv * u_latticeSize * u_upsample;
+    // Calculate which rotor cell we're in
+    vec2 latticeCoord = v_uv * u_latticeSize;
     ivec2 cell = ivec2(floor(latticeCoord));
     
-    // Sample theta and omega (placeholder - textures not yet implemented)
-    // float theta = texelFetch(u_thetaTexture, cell, 0).r;
-    // float omega = texelFetch(u_omegaTexture, cell, 0).r;
+    // Sample theta and omega from textures
+    float theta = texelFetch(u_thetaTexture, cell, 0).r;
+    float omega = texelFetch(u_omegaTexture, cell, 0).r;
     
-    // Placeholder: gradient based on position
-    float hue = v_uv.x;
-    float value = 0.5 + 0.5 * sin(v_uv.y * 10.0);
+    // Calculate position within the rotor cell (0 to 1)
+    vec2 cellUV = fract(latticeCoord);
     
+    // Center of cell is at (0.5, 0.5)
+    vec2 centerOffset = cellUV - vec2(0.5);
+    
+    // Calculate distance from center (for disk shape)
+    float dist = length(centerOffset);
+    
+    // Disk radius (slightly less than 0.5 to leave gap between rotors)
+    float diskRadius = 0.45;
+    
+    // Anti-aliased edge using smoothstep
+    float alpha = 1.0 - smoothstep(diskRadius - 0.02, diskRadius, dist);
+    
+    // Map theta to hue: theta in [-PI, PI] -> hue in [0, 1]
+    // theta = 0 (pointing down) -> hue = 0 (red)
+    // theta increases CCW -> hue increases
+    float hue = (theta / (2.0 * 3.14159265359)) + 0.5;
+    hue = fract(hue); // Wrap to [0, 1]
+    
+    // Map omega^2 to value (brightness)
+    // omega^2 represents kinetic energy
+    float energy = omega * omega;
+    // Map energy to value with some contrast
+    // Zero energy -> dim but visible (0.2)
+    // High energy -> bright (up to 1.0)
+    float value = 0.2 + 0.8 * min(energy / 5.0, 1.0);
+    
+    // Convert HSV to RGB
     vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
-    fragColor = vec4(rgb, 1.0);
+    
+    // Output with anti-aliased alpha
+    fragColor = vec4(rgb, alpha);
 }
 `;

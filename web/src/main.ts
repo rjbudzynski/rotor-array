@@ -28,7 +28,7 @@ import {
 } from "./webgl.ts";
 import {
   fullScreenQuadVertexShader,
-  testFragmentShader,
+  rotorFragmentShader,
 } from "./shaders.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
@@ -42,12 +42,13 @@ const overlayCanvas = document.getElementById(
 // ============================================================================
 
 let webgl: WebGLContext | null = null;
-let testProgram: ShaderProgram | null = null;
+let rotorProgram: ShaderProgram | null = null;
 let fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
   null;
 let webglContextLost = false;
 let rotorTextures: RotorStateTextures | null = null;
 let _currentLSide = 0;
+let useWebGL2Rendering = false; // Toggle between Canvas2D and WebGL2
 
 /**
  * Initialize WebGL2 context and resources
@@ -96,17 +97,17 @@ function initWebGLResources(): boolean {
   if (!webgl) return false;
   const { gl } = webgl;
 
-  // Create test shader program
-  testProgram = createShaderProgram(
+  // Create rotor rendering shader program
+  rotorProgram = createShaderProgram(
     gl,
     fullScreenQuadVertexShader,
-    testFragmentShader,
+    rotorFragmentShader,
     ["a_position"],
-    [],
+    ["u_thetaTexture", "u_omegaTexture", "u_latticeSize", "u_upsample"],
   );
 
-  if (!testProgram) {
-    console.error("Failed to create test shader program");
+  if (!rotorProgram) {
+    console.error("Failed to create rotor shader program");
     return false;
   }
 
@@ -126,10 +127,15 @@ function initWebGLResources(): boolean {
 }
 
 /**
- * Render a test frame with WebGL2
+ * Render rotors using WebGL2
  */
-function _renderTestFrame(): void {
-  if (!webgl || !testProgram || !fullScreenQuad || webglContextLost) return;
+function renderRotorsWebGL2(
+  lSide: number,
+  upsample: number,
+): void {
+  if (!webgl || !rotorProgram || !fullScreenQuad || !rotorTextures || webglContextLost) {
+    return;
+  }
 
   const { gl } = webgl;
 
@@ -139,14 +145,40 @@ function _renderTestFrame(): void {
     gl.viewport(0, 0, width, height);
   }
 
-  // Clear and render
+  // Clear canvas
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  gl.useProgram(testProgram.program);
+  // Enable blending for anti-aliased edges
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  // Use rotor shader
+  gl.useProgram(rotorProgram.program);
+
+  // Bind textures
+  const thetaLoc = rotorProgram.uniformLocations.get("u_thetaTexture");
+  const omegaLoc = rotorProgram.uniformLocations.get("u_omegaTexture");
+  _bindRotorStateTextures(gl, rotorTextures, thetaLoc ?? null, omegaLoc ?? null, 0, 1);
+
+  // Set uniforms
+  const latticeSizeLoc = rotorProgram.uniformLocations.get("u_latticeSize");
+  if (latticeSizeLoc !== undefined && latticeSizeLoc !== null) {
+    gl.uniform2f(latticeSizeLoc, lSide, lSide);
+  }
+
+  const upsampleLoc = rotorProgram.uniformLocations.get("u_upsample");
+  if (upsampleLoc !== undefined && upsampleLoc !== null) {
+    gl.uniform1f(upsampleLoc, upsample);
+  }
+
+  // Draw full-screen quad
   gl.bindVertexArray(fullScreenQuad.vao);
   gl.drawArrays(gl.TRIANGLES, 0, fullScreenQuad.vertexCount);
   gl.bindVertexArray(null);
+
+  // Disable blending
+  gl.disable(gl.BLEND);
 }
 
 /**
@@ -215,10 +247,28 @@ try {
   setStatus(`error: ${err instanceof Error ? err.message : String(err)}`, "#f44336");
 }
 
-// Auto-hide after 5 seconds
-setTimeout(() => {
-  webglStatusEl.style.opacity = "0.5";
-}, 5000);
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    webglStatusEl.style.opacity = "0.5";
+  }, 5000);
+
+  // Add click handler to toggle render mode
+  webglStatusEl.style.cursor = "pointer";
+  webglStatusEl.title = "Click to toggle WebGL2 rendering";
+  webglStatusEl.addEventListener("click", () => {
+    useWebGL2Rendering = !useWebGL2Rendering;
+    // Toggle canvas visibility
+    if (useWebGL2Rendering) {
+      canvas.style.display = "none";
+      webglCanvas.style.display = "block";
+      setStatus("WebGL2 active (click to use Canvas2D)", "#4caf50");
+    } else {
+      canvas.style.display = "block";
+      webglCanvas.style.display = "none";
+      setStatus("Canvas2D active (click to use WebGL2)", "#2196f3");
+    }
+    console.log(`[RotorArray] Switched to ${useWebGL2Rendering ? "WebGL2" : "Canvas2D"} rendering`);
+  });
 const mdCanvas = document.getElementById(
   "mean-dir-canvas",
 ) as HTMLCanvasElement;
@@ -276,12 +326,8 @@ worker.onmessage = (e) => {
     if (webgl && thetaBuf && omegaBuf) {
       initRotorTextures(lSide);
       updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
-      // TODO(rotor-array-g5z): Render using WebGL2 shader instead of ImageBitmap
     }
 
-    // TODO(rotor-array-g5z): Use WebGL2 for rendering when texture pipeline is ready
-    // For now, WebGL2 is initialized but rendering still uses Canvas 2D / ImageBitmap
-    // _renderTestFrame(); // Uncomment to test WebGL2 pipeline
     if (displaySize > 0) {
       const sizePx = `${displaySize}px`;
       if (canvas.style.width !== sizePx) {
@@ -289,17 +335,26 @@ worker.onmessage = (e) => {
         canvas.style.height = sizePx;
         overlayCanvas.style.width = sizePx;
         overlayCanvas.style.height = sizePx;
+        webglCanvas.style.width = sizePx;
+        webglCanvas.style.height = sizePx;
       }
     }
 
-    // Draw ImageBitmap directly (WASM-rendered visualization)
-    // ImageBitmap is transferred, not a Promise
-    if (bitmapCtx) {
-      bitmapCtx.transferFromImageBitmap(imageBitmap);
-    } else if (ctx2d) {
-      ctx2d.drawImage(imageBitmap, 0, 0);
+    // Render using WebGL2 or Canvas2D based on toggle
+    if (useWebGL2Rendering && webgl && rotorTextures) {
+      // WebGL2 rendering
+      renderRotorsWebGL2(lSide, upsample);
+      // Still need to close the ImageBitmap even though we're not using it
+      imageBitmap.close();
+    } else {
+      // Canvas2D rendering (fallback)
+      if (bitmapCtx) {
+        bitmapCtx.transferFromImageBitmap(imageBitmap);
+      } else if (ctx2d) {
+        ctx2d.drawImage(imageBitmap, 0, 0);
+      }
+      imageBitmap.close();
     }
-    imageBitmap.close();
 
     // Clear overlay to prevent arrow artifacts from previous frames
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
