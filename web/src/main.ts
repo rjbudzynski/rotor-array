@@ -134,6 +134,13 @@ function renderRotorsWebGL2(
   upsample: number,
 ): void {
   if (!webgl || !rotorProgram || !fullScreenQuad || !rotorTextures || webglContextLost) {
+    console.log("[WebGL2 Render] Skipping - missing resources:", {
+      hasWebgl: !!webgl,
+      hasProgram: !!rotorProgram,
+      hasQuad: !!fullScreenQuad,
+      hasTextures: !!rotorTextures,
+      contextLost: webglContextLost,
+    });
     return;
   }
 
@@ -141,12 +148,14 @@ function renderRotorsWebGL2(
 
   // Resize if needed
   const { width, height } = resizeCanvasToDisplaySize(webglCanvas);
+  console.log("[WebGL2 Render] Canvas size:", width, "x", height, "L=", lSide, "upsample=", upsample);
+  
   if (gl.canvas.width !== width || gl.canvas.height !== height) {
     gl.viewport(0, 0, width, height);
   }
 
-  // Clear canvas
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  // Clear canvas with blue to verify we're rendering
+  gl.clearColor(0.0, 0.0, 0.5, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
   // Enable blending for anti-aliased edges
@@ -159,23 +168,27 @@ function renderRotorsWebGL2(
   // Bind textures
   const thetaLoc = rotorProgram.uniformLocations.get("u_thetaTexture");
   const omegaLoc = rotorProgram.uniformLocations.get("u_omegaTexture");
+  console.log("[WebGL2 Render] Texture uniform locations:", { thetaLoc, omegaLoc });
   _bindRotorStateTextures(gl, rotorTextures, thetaLoc ?? null, omegaLoc ?? null, 0, 1);
 
   // Set uniforms
   const latticeSizeLoc = rotorProgram.uniformLocations.get("u_latticeSize");
   if (latticeSizeLoc !== undefined && latticeSizeLoc !== null) {
     gl.uniform2f(latticeSizeLoc, lSide, lSide);
+    console.log("[WebGL2 Render] Set latticeSize uniform:", lSide);
   }
 
   const upsampleLoc = rotorProgram.uniformLocations.get("u_upsample");
   if (upsampleLoc !== undefined && upsampleLoc !== null) {
     gl.uniform1f(upsampleLoc, upsample);
+    console.log("[WebGL2 Render] Set upsample uniform:", upsample);
   }
 
   // Draw full-screen quad
   gl.bindVertexArray(fullScreenQuad.vao);
   gl.drawArrays(gl.TRIANGLES, 0, fullScreenQuad.vertexCount);
   gl.bindVertexArray(null);
+  console.log("[WebGL2 Render] Drew", fullScreenQuad.vertexCount, "vertices");
 
   // Disable blending
   gl.disable(gl.BLEND);
@@ -324,8 +337,11 @@ worker.onmessage = (e) => {
 
     // Initialize/resize rotor textures if needed
     if (webgl && thetaBuf && omegaBuf) {
-      initRotorTextures(lSide);
-      updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
+      const texturesReady = initRotorTextures(lSide);
+      const updateSuccess = updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
+      console.log("[Frame] Textures ready:", texturesReady, "Update success:", updateSuccess);
+    } else {
+      console.log("[Frame] Skipping textures - webgl:", !!webgl, "theta:", !!thetaBuf, "omega:", !!omegaBuf);
     }
 
     if (displaySize > 0) {
@@ -343,6 +359,12 @@ worker.onmessage = (e) => {
     // Render using WebGL2 or Canvas2D based on toggle
     if (useWebGL2Rendering && webgl && rotorTextures) {
       // WebGL2 rendering
+      // Ensure webgl canvas matches sim-canvas size
+      if (webglCanvas.width !== canvas.width || webglCanvas.height !== canvas.height) {
+        webglCanvas.width = canvas.width;
+        webglCanvas.height = canvas.height;
+        console.log("[Frame] Resized webgl-canvas to:", canvas.width, "x", canvas.height);
+      }
       renderRotorsWebGL2(lSide, upsample);
       // Still need to close the ImageBitmap even though we're not using it
       imageBitmap.close();
