@@ -154,8 +154,8 @@ function renderRotorsWebGL2(
     gl.viewport(0, 0, width, height);
   }
 
-  // Clear canvas with blue to verify we're rendering
-  gl.clearColor(0.0, 0.0, 0.5, 1.0);
+  // Clear canvas
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
   // Enable blending for anti-aliased edges
@@ -272,6 +272,11 @@ try {
     useWebGL2Rendering = !useWebGL2Rendering;
     // Toggle canvas visibility
     if (useWebGL2Rendering) {
+      // Copy size from sim-canvas before making webgl-canvas visible
+      webglCanvas.width = canvas.width;
+      webglCanvas.height = canvas.height;
+      webglCanvas.style.width = canvas.style.width;
+      webglCanvas.style.height = canvas.style.height;
       canvas.style.display = "none";
       webglCanvas.style.display = "block";
       setStatus("WebGL2 active (click to use Canvas2D)", "#4caf50");
@@ -363,7 +368,13 @@ worker.onmessage = (e) => {
       if (webglCanvas.width !== canvas.width || webglCanvas.height !== canvas.height) {
         webglCanvas.width = canvas.width;
         webglCanvas.height = canvas.height;
-        console.log("[Frame] Resized webgl-canvas to:", canvas.width, "x", canvas.height);
+        console.log("[Frame] Resized webgl-canvas internal size to:", canvas.width, "x", canvas.height);
+      }
+      // Also ensure style matches
+      if (webglCanvas.style.width !== canvas.style.width) {
+        webglCanvas.style.width = canvas.style.width;
+        webglCanvas.style.height = canvas.style.height;
+        console.log("[Frame] Resized webgl-canvas style to:", canvas.style.width, "x", canvas.style.height);
       }
       renderRotorsWebGL2(lSide, upsample);
       // Still need to close the ImageBitmap even though we're not using it
