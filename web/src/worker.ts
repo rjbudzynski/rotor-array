@@ -114,6 +114,9 @@ self.onmessage = async (e) => {
 let thetaBuffer: Float64Array | null = null;
 let omegaBuffer: Float64Array | null = null;
 
+// Always transfer raw arrays for WebGL2 texture pipeline
+const transferRawArrays = true;
+
 async function renderFrame() {
   if (!engine || !visualizer || !wasmExports) return;
   if (rendering) return;
@@ -154,7 +157,7 @@ async function renderFrame() {
       imageBitmap = await createImageBitmap(imageData);
     }
 
-    if (showArrows) {
+    if (transferRawArrays || showArrows) {
       // Create or resize reusable buffers for theta/omega
       if (!thetaBuffer || thetaBuffer.length !== N) {
         thetaBuffer = new Float64Array(N);
@@ -198,9 +201,9 @@ async function renderFrame() {
     };
 
     const transfer: Transferable[] = [imageBitmap];
-    if (showArrows && thetaBuffer && omegaBuffer) {
-      payload.theta = thetaBuffer.buffer;
-      payload.omega = omegaBuffer.buffer;
+    if ((transferRawArrays || showArrows) && thetaBuffer && omegaBuffer) {
+      payload.theta = thetaBuffer.buffer as ArrayBuffer;
+      payload.omega = omegaBuffer.buffer as ArrayBuffer;
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
     }
 

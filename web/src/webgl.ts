@@ -277,3 +277,177 @@ export function resizeCanvasToDisplaySize(
 
   return { width: targetWidth, height: targetHeight };
 }
+
+// ============================================================================
+// TEXTURE PIPELINE FOR ROTOR STATE
+// ============================================================================
+
+export interface RotorStateTextures {
+  thetaTexture: WebGLTexture;
+  omegaTexture: WebGLTexture;
+  lSide: number;
+}
+
+/**
+ * Create Float32 textures for storing rotor state (theta and omega)
+ * Textures are L x L size with single-channel (R32F) format
+ */
+export function createRotorStateTextures(
+  gl: WebGL2RenderingContext,
+  lSide: number,
+): RotorStateTextures | null {
+  // Check for required extensions
+  const ext = gl.getExtension("EXT_color_buffer_float");
+  if (!ext) {
+    console.warn("EXT_color_buffer_float not supported, falling back to RGBA8");
+  }
+
+  const thetaTexture = gl.createTexture();
+  const omegaTexture = gl.createTexture();
+
+  if (!thetaTexture || !omegaTexture) {
+    if (thetaTexture) gl.deleteTexture(thetaTexture);
+    if (omegaTexture) gl.deleteTexture(omegaTexture);
+    console.error("Failed to create rotor state textures");
+    return null;
+  }
+
+  // Create and configure theta texture
+  gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.R32F,
+    lSide,
+    lSide,
+    0,
+    gl.RED,
+    gl.FLOAT,
+    null,
+  );
+
+  // Create and configure omega texture
+  gl.bindTexture(gl.TEXTURE_2D, omegaTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.R32F,
+    lSide,
+    lSide,
+    0,
+    gl.RED,
+    gl.FLOAT,
+    null,
+  );
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  return {
+    thetaTexture,
+    omegaTexture,
+    lSide,
+  };
+}
+
+/**
+ * Update rotor state textures with new data
+ * Converts Float64Array to Float32Array for GPU upload
+ */
+export function updateRotorStateTextures(
+  gl: WebGL2RenderingContext,
+  textures: RotorStateTextures,
+  theta: Float64Array,
+  omega: Float64Array,
+): boolean {
+  const { thetaTexture, omegaTexture, lSide } = textures;
+  const n = lSide * lSide;
+
+  if (theta.length !== n || omega.length !== n) {
+    console.error("Data size mismatch with texture dimensions");
+    return false;
+  }
+
+  // Convert Float64Array to Float32Array for WebGL
+  const thetaF32 = new Float32Array(theta);
+  const omegaF32 = new Float32Array(omega);
+
+  // Upload theta texture
+  gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
+  gl.texSubImage2D(
+    gl.TEXTURE_2D,
+    0,
+    0,
+    0,
+    lSide,
+    lSide,
+    gl.RED,
+    gl.FLOAT,
+    thetaF32,
+  );
+
+  // Upload omega texture
+  gl.bindTexture(gl.TEXTURE_2D, omegaTexture);
+  gl.texSubImage2D(
+    gl.TEXTURE_2D,
+    0,
+    0,
+    0,
+    lSide,
+    lSide,
+    gl.RED,
+    gl.FLOAT,
+    omegaF32,
+  );
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  return true;
+}
+
+/**
+ * Bind rotor state textures to shader program
+ * Assumes textures are already created and updated
+ */
+export function bindRotorStateTextures(
+  gl: WebGL2RenderingContext,
+  textures: RotorStateTextures,
+  thetaUniformLocation: WebGLUniformLocation | null,
+  omegaUniformLocation: WebGLUniformLocation | null,
+  textureUnit0 = 0,
+  textureUnit1 = 1,
+): void {
+  const { thetaTexture, omegaTexture } = textures;
+
+  // Bind theta texture to unit 0
+  gl.activeTexture(gl.TEXTURE0 + textureUnit0);
+  gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
+  if (thetaUniformLocation !== null) {
+    gl.uniform1i(thetaUniformLocation, textureUnit0);
+  }
+
+  // Bind omega texture to unit 1
+  gl.activeTexture(gl.TEXTURE0 + textureUnit1);
+  gl.bindTexture(gl.TEXTURE_2D, omegaTexture);
+  if (omegaUniformLocation !== null) {
+    gl.uniform1i(omegaUniformLocation, textureUnit1);
+  }
+}
+
+/**
+ * Delete rotor state textures and cleanup GPU resources
+ */
+export function deleteRotorStateTextures(
+  gl: WebGL2RenderingContext,
+  textures: RotorStateTextures,
+): void {
+  gl.deleteTexture(textures.thetaTexture);
+  gl.deleteTexture(textures.omegaTexture);
+}

@@ -12,12 +12,17 @@ import {
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
 import {
+  bindRotorStateTextures as _bindRotorStateTextures,
   checkWebGL2Support,
   createFullScreenQuad,
+  createRotorStateTextures,
   createShaderProgram,
+  deleteRotorStateTextures,
   initWebGL2,
   resizeCanvasToDisplaySize,
   setupContextHandlers,
+  updateRotorStateTextures,
+  type RotorStateTextures,
   type ShaderProgram,
   type WebGLContext,
 } from "./webgl.ts";
@@ -41,6 +46,8 @@ let testProgram: ShaderProgram | null = null;
 let fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
   null;
 let webglContextLost = false;
+let rotorTextures: RotorStateTextures | null = null;
+let _currentLSide = 0;
 
 /**
  * Initialize WebGL2 context and resources
@@ -142,6 +149,41 @@ function _renderTestFrame(): void {
   gl.bindVertexArray(null);
 }
 
+/**
+ * Initialize or resize rotor state textures for WebGL2 rendering
+ */
+function initRotorTextures(lSide: number): boolean {
+  if (!webgl) return false;
+
+  // Clean up existing textures if lattice size changed
+  if (rotorTextures && rotorTextures.lSide !== lSide) {
+    deleteRotorStateTextures(webgl.gl, rotorTextures);
+    rotorTextures = null;
+  }
+
+  // Create new textures if needed
+  if (!rotorTextures) {
+    rotorTextures = createRotorStateTextures(webgl.gl, lSide);
+    if (rotorTextures) {
+      console.log(`[RotorArray] Created rotor textures: ${lSide}x${lSide}`);
+    }
+  }
+
+  _currentLSide = lSide;
+  return rotorTextures !== null;
+}
+
+/**
+ * Update rotor state textures from Float64Array data
+ */
+function updateRotorTextures(
+  theta: Float64Array,
+  omega: Float64Array,
+): boolean {
+  if (!webgl || !rotorTextures) return false;
+  return updateRotorStateTextures(webgl.gl, rotorTextures, theta, omega);
+}
+
 // Try to initialize WebGL2
 console.log("[RotorArray] Starting WebGL2 initialization...");
 
@@ -215,6 +257,7 @@ worker.onmessage = (e) => {
     const {
       imageBitmap,
       theta: thetaBuf,
+      omega: omegaBuf,
       orderParameter,
       lSide,
       canvasSize,
@@ -229,9 +272,16 @@ worker.onmessage = (e) => {
       overlayCanvas.height = canvasSize;
     }
 
+    // Initialize/resize rotor textures if needed
+    if (webgl && thetaBuf && omegaBuf) {
+      initRotorTextures(lSide);
+      updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
+      // TODO(rotor-array-g5z): Render using WebGL2 shader instead of ImageBitmap
+    }
+
     // TODO(rotor-array-g5z): Use WebGL2 for rendering when texture pipeline is ready
     // For now, WebGL2 is initialized but rendering still uses Canvas 2D / ImageBitmap
-    // renderTestFrame(); // Uncomment to test WebGL2 pipeline
+    // _renderTestFrame(); // Uncomment to test WebGL2 pipeline
     if (displaySize > 0) {
       const sizePx = `${displaySize}px`;
       if (canvas.style.width !== sizePx) {
