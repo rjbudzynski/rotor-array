@@ -14,6 +14,11 @@ bd sync               # Sync with git
 
 ## Landing the Plane (Session Completion)
 
+Session is complete when the work has been verified by the user.
+
+For a visual app, passing unit test and build **is not sufficient** -- interactive 
+verification is a MUST.
+
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
 
 **MANDATORY WORKFLOW:**
@@ -37,4 +42,3 @@ bd sync               # Sync with git
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-

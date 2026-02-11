@@ -142,7 +142,40 @@ function _renderTestFrame(): void {
 }
 
 // Try to initialize WebGL2
-const _webglInitialized = initWebGL();
+console.log("[RotorArray] Starting WebGL2 initialization...");
+
+// Visual status indicator
+const webglStatusEl = document.createElement("div");
+webglStatusEl.id = "webgl-status";
+webglStatusEl.style.cssText = "position:fixed;top:10px;left:10px;padding:8px 12px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:all 0.3s;";
+document.body.appendChild(webglStatusEl);
+
+function setStatus(msg: string, color: string) {
+  webglStatusEl.textContent = `WebGL2: ${msg}`;
+  webglStatusEl.style.background = color;
+  webglStatusEl.style.color = color === "#ffeb3b" ? "#000" : "#fff";
+  console.log(`[RotorArray] WebGL2 status: ${msg}`);
+}
+
+setStatus("initializing...", "#2196f3");
+
+let _webglInitialized = false;
+try {
+  _webglInitialized = initWebGL();
+  if (_webglInitialized) {
+    setStatus("ready", "#4caf50");
+  } else {
+    setStatus("fallback to Canvas2D", "#ff9800");
+  }
+} catch (err) {
+  console.error("[RotorArray] WebGL2 initialization failed:", err);
+  setStatus(`error: ${err instanceof Error ? err.message : String(err)}`, "#f44336");
+}
+
+// Auto-hide after 5 seconds
+setTimeout(() => {
+  webglStatusEl.style.opacity = "0.5";
+}, 5000);
 const mdCanvas = document.getElementById(
   "mean-dir-canvas",
 ) as HTMLCanvasElement;

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WebGL2 Scaffolding Test</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #222; color: #fff; }
+        #container { display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        canvas { border: 2px solid #444; margin: 10px 0; }
+        #log { 
+            background: #111; 
+            padding: 10px; 
+            font-family: monospace; 
+            white-space: pre-wrap; 
+            max-width: 600px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #4f4; }
+        .error { color: #f44; }
+        .info { color: #44f; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>WebGL2 Scaffolding Test</h1>
+        <canvas id="test-canvas" width="400" height="400"></canvas>
+        <div id="log"></div>
+    </div>
+    <script type="module">
+        import {
+            checkWebGL2Support,
+            createFullScreenQuad,
+            createShaderProgram,
+            initWebGL2,
+            resizeCanvasToDisplaySize,
+            setupContextHandlers,
+        } from './src/webgl.ts';
+        import {
+            fullScreenQuadVertexShader,
+            testFragmentShader,
+        } from './src/shaders.ts';
+
+        const logEl = document.getElementById('log');
+        function log(msg, cls = 'info') {
+            const line = document.createElement('div');
+            line.className = cls;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(line);
+            console.log(msg);
+        }
+
+        async function runTests() {
+            log('Starting WebGL2 scaffolding tests...');
+
+            // Test 1: Support detection
+            const support = checkWebGL2Support();
+            if (support.supported) {
+                log(`✓ WebGL2 supported`, 'success');
+                log(`  Max texture size: ${support.maxTextureSize}`, 'info');
+                log(`  Max texture units: ${support.maxTextureImageUnits}`, 'info');
+            } else {
+                log('✗ WebGL2 not supported', 'error');
+                return;
+            }
+
+            // Test 2: Context creation
+            const canvas = document.getElementById('test-canvas');
+            const webgl = initWebGL2(canvas);
+            if (!webgl) {
+                log('✗ Failed to create WebGL2 context', 'error');
+                return;
+            }
+            log('✓ WebGL2 context created', 'success');
+            const { gl, loseContextExt } = webgl;
+
+            // Test 3: Shader compilation
+            const program = createShaderProgram(
+                gl,
+                fullScreenQuadVertexShader,
+                testFragmentShader,
+                ['a_position'],
+                []
+            );
+            if (!program) {
+                log('✗ Failed to compile/link shaders', 'error');
+                return;
+            }
+            log('✓ Shader program compiled and linked', 'success');
+
+            // Test 4: Full-screen quad
+            const quad = createFullScreenQuad(gl);
+            if (!quad) {
+                log('✗ Failed to create full-screen quad', 'error');
+                return;
+            }
+            log('✓ Full-screen quad VAO created', 'success');
+
+            // Test 5: Render test
+            resizeCanvasToDisplaySize(canvas);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0.1, 0.1, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(program.program);
+            gl.bindVertexArray(quad.vao);
+            gl.drawArrays(gl.TRIANGLES, 0, quad.vertexCount);
+            gl.bindVertexArray(null);
+
+            log('✓ Render test completed - you should see a gradient', 'success');
+
+            // Test 6: Context lost/restored handlers
+            let lostCalled = false;
+            let restoredCalled = false;
+            
+            const cleanup = setupContextHandlers(
+                canvas,
+                (e) => {
+                    lostCalled = true;
+                    log('✓ Context lost handler called', 'success');
+                    e.preventDefault();
+                },
+                () => {
+                    restoredCalled = true;
+                    log('✓ Context restored handler called', 'success');
+                }
+            );
+
+            if (loseContextExt) {
+                log('Testing context loss (2 sec)...');
+                loseContextExt.loseContext();
+                setTimeout(() => {
+                    loseContextExt.restoreContext();
+                    setTimeout(() => {
+                        if (lostCalled && restoredCalled) {
+                            log('✓ Context loss/restore cycle completed', 'success');
+                        } else {
+                            log('✗ Context handlers not called', 'error');
+                        }
+                        cleanup();
+                        log('\n=== All tests completed ===', 'success');
+                    }, 100);
+                }, 100);
+            } else {
+                log('ℹ WEBGL_lose_context extension not available (skipping loss test)', 'info');
+                cleanup();
+                log('\n=== All tests completed ===', 'success');
+            }
+        }
+
+        runTests().catch(err => {
+            log(`✗ Test error: ${err.message}`, 'error');
+            console.error(err);
+        });
+    </script>
+</body>
+</html>
