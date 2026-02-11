@@ -11,11 +11,138 @@ import {
   SLIDER_SCALE,
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
+import {
+  checkWebGL2Support,
+  createFullScreenQuad,
+  createShaderProgram,
+  initWebGL2,
+  resizeCanvasToDisplaySize,
+  setupContextHandlers,
+  type ShaderProgram,
+  type WebGLContext,
+} from "./webgl.ts";
+import {
+  fullScreenQuadVertexShader,
+  testFragmentShader,
+} from "./shaders.ts";
 
 const canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
 const overlayCanvas = document.getElementById(
   "overlay-canvas",
 ) as HTMLCanvasElement;
+
+// ============================================================================
+// WEBGL2 INITIALIZATION
+// ============================================================================
+
+let webgl: WebGLContext | null = null;
+let testProgram: ShaderProgram | null = null;
+let fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
+  null;
+let webglContextLost = false;
+
+/**
+ * Initialize WebGL2 context and resources
+ */
+function initWebGL(): boolean {
+  const support = checkWebGL2Support();
+  if (!support.supported) {
+    console.warn("WebGL2 not supported, falling back to Canvas 2D");
+    return false;
+  }
+
+  console.log("WebGL2 support detected:", {
+    maxTextureSize: support.maxTextureSize,
+    maxTextureImageUnits: support.maxTextureImageUnits,
+  });
+
+  webgl = initWebGL2(canvas);
+  if (!webgl) {
+    console.warn("Failed to initialize WebGL2 context");
+    return false;
+  }
+
+  // Setup context lost/restored handlers
+  setupContextHandlers(
+    canvas,
+    (e) => {
+      console.warn("WebGL context lost");
+      webglContextLost = true;
+      e.preventDefault(); // Allow restoration
+    },
+    () => {
+      console.log("WebGL context restored");
+      webglContextLost = false;
+      // Re-initialize resources
+      initWebGLResources();
+    },
+  );
+
+  return initWebGLResources();
+}
+
+/**
+ * Create shader programs and geometry
+ */
+function initWebGLResources(): boolean {
+  if (!webgl) return false;
+  const { gl } = webgl;
+
+  // Create test shader program
+  testProgram = createShaderProgram(
+    gl,
+    fullScreenQuadVertexShader,
+    testFragmentShader,
+    ["a_position"],
+    [],
+  );
+
+  if (!testProgram) {
+    console.error("Failed to create test shader program");
+    return false;
+  }
+
+  // Create full-screen quad
+  fullScreenQuad = createFullScreenQuad(gl);
+  if (!fullScreenQuad) {
+    console.error("Failed to create full-screen quad");
+    return false;
+  }
+
+  // Initial viewport setup
+  const { width, height } = resizeCanvasToDisplaySize(canvas);
+  gl.viewport(0, 0, width, height);
+
+  console.log("WebGL2 initialized successfully");
+  return true;
+}
+
+/**
+ * Render a test frame with WebGL2
+ */
+function _renderTestFrame(): void {
+  if (!webgl || !testProgram || !fullScreenQuad || webglContextLost) return;
+
+  const { gl } = webgl;
+
+  // Resize if needed
+  const { width, height } = resizeCanvasToDisplaySize(canvas);
+  if (gl.canvas.width !== width || gl.canvas.height !== height) {
+    gl.viewport(0, 0, width, height);
+  }
+
+  // Clear and render
+  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(testProgram.program);
+  gl.bindVertexArray(fullScreenQuad.vao);
+  gl.drawArrays(gl.TRIANGLES, 0, fullScreenQuad.vertexCount);
+  gl.bindVertexArray(null);
+}
+
+// Try to initialize WebGL2
+const _webglInitialized = initWebGL();
 const mdCanvas = document.getElementById(
   "mean-dir-canvas",
 ) as HTMLCanvasElement;
@@ -63,6 +190,10 @@ worker.onmessage = (e) => {
       overlayCanvas.width = canvasSize;
       overlayCanvas.height = canvasSize;
     }
+
+    // TODO(rotor-array-g5z): Use WebGL2 for rendering when texture pipeline is ready
+    // For now, WebGL2 is initialized but rendering still uses Canvas 2D / ImageBitmap
+    // renderTestFrame(); // Uncomment to test WebGL2 pipeline
     if (displaySize > 0) {
       const sizePx = `${displaySize}px`;
       if (canvas.style.width !== sizePx) {
