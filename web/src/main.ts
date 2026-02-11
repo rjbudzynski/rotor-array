@@ -170,8 +170,8 @@ function renderRotorsWebGL2(
     gl.viewport(0, 0, width, height);
   }
 
-  // Clear canvas
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  // Clear canvas - use dark gray to distinguish from pure black
+  gl.clearColor(0.1, 0.1, 0.1, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
   // Choose shader program
@@ -186,7 +186,7 @@ function renderRotorsWebGL2(
     return;
   }
 
-  console.log("[WebGL2 Render] Using shader:", useDebugShader ? "debug" : "rotor");
+  console.log("[WebGL2 Render] Using shader:", useDebugShader ? "debug" : "rotor", "program:", program.program);
 
   // Enable blending for anti-aliased edges
   gl.enable(gl.BLEND);
@@ -215,13 +215,23 @@ function renderRotorsWebGL2(
   }
 
   // Draw full-screen quad
+  console.log("[WebGL2 Render] VAO:", fullScreenQuad.vao, "vertexCount:", fullScreenQuad.vertexCount);
   gl.bindVertexArray(fullScreenQuad.vao);
   gl.drawArrays(gl.TRIANGLES, 0, fullScreenQuad.vertexCount);
   gl.bindVertexArray(null);
   console.log("[WebGL2 Render] Drew", fullScreenQuad.vertexCount, "vertices");
 
+  // Check for GL errors after draw
+  const drawError = gl.getError();
+  if (drawError !== gl.NO_ERROR) {
+    console.error("[WebGL2 Render] GL error after draw:", drawError);
+  }
+
   // Disable blending
   gl.disable(gl.BLEND);
+
+  // Force flush to ensure rendering completes
+  gl.flush();
 }
 
 /**
