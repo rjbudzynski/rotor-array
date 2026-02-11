@@ -27,6 +27,7 @@ import {
   type WebGLContext,
 } from "./webgl.ts";
 import {
+  debugTextureShader,
   fullScreenQuadVertexShader,
   rotorFragmentShader,
 } from "./shaders.ts";
@@ -43,12 +44,14 @@ const overlayCanvas = document.getElementById(
 
 let webgl: WebGLContext | null = null;
 let rotorProgram: ShaderProgram | null = null;
+let debugProgram: ShaderProgram | null = null;
 let fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
   null;
 let webglContextLost = false;
 let rotorTextures: RotorStateTextures | null = null;
 let _currentLSide = 0;
 let useWebGL2Rendering = false; // Toggle between Canvas2D and WebGL2
+const useDebugShader = true; // TEMP: Use debug shader to diagnose texture issues
 
 /**
  * Initialize WebGL2 context and resources
@@ -111,6 +114,20 @@ function initWebGLResources(): boolean {
     return false;
   }
 
+  // Create debug shader program for diagnosing texture issues
+  debugProgram = createShaderProgram(
+    gl,
+    fullScreenQuadVertexShader,
+    debugTextureShader,
+    ["a_position"],
+    ["u_thetaTexture", "u_omegaTexture", "u_latticeSize"],
+  );
+
+  if (!debugProgram) {
+    console.error("Failed to create debug shader program");
+    return false;
+  }
+
   // Create full-screen quad
   fullScreenQuad = createFullScreenQuad(gl);
   if (!fullScreenQuad) {
@@ -133,10 +150,9 @@ function renderRotorsWebGL2(
   lSide: number,
   upsample: number,
 ): void {
-  if (!webgl || !rotorProgram || !fullScreenQuad || !rotorTextures || webglContextLost) {
+  if (!webgl || !fullScreenQuad || !rotorTextures || webglContextLost) {
     console.log("[WebGL2 Render] Skipping - missing resources:", {
       hasWebgl: !!webgl,
-      hasProgram: !!rotorProgram,
       hasQuad: !!fullScreenQuad,
       hasTextures: !!rotorTextures,
       contextLost: webglContextLost,
@@ -158,27 +174,41 @@ function renderRotorsWebGL2(
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
+  // Choose shader program
+  let program: ShaderProgram | null = null;
+  if (useDebugShader && debugProgram) {
+    program = debugProgram;
+  } else if (rotorProgram) {
+    program = rotorProgram;
+  }
+  if (!program) {
+    console.error("[WebGL2 Render] No shader program available");
+    return;
+  }
+
+  console.log("[WebGL2 Render] Using shader:", useDebugShader ? "debug" : "rotor");
+
   // Enable blending for anti-aliased edges
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  // Use rotor shader
-  gl.useProgram(rotorProgram.program);
+  // Use shader
+  gl.useProgram(program.program);
 
   // Bind textures
-  const thetaLoc = rotorProgram.uniformLocations.get("u_thetaTexture");
-  const omegaLoc = rotorProgram.uniformLocations.get("u_omegaTexture");
+  const thetaLoc = program.uniformLocations.get("u_thetaTexture");
+  const omegaLoc = program.uniformLocations.get("u_omegaTexture");
   console.log("[WebGL2 Render] Texture uniform locations:", { thetaLoc, omegaLoc });
   _bindRotorStateTextures(gl, rotorTextures, thetaLoc ?? null, omegaLoc ?? null, 0, 1);
 
   // Set uniforms
-  const latticeSizeLoc = rotorProgram.uniformLocations.get("u_latticeSize");
+  const latticeSizeLoc = program.uniformLocations.get("u_latticeSize");
   if (latticeSizeLoc !== undefined && latticeSizeLoc !== null) {
     gl.uniform2f(latticeSizeLoc, lSide, lSide);
     console.log("[WebGL2 Render] Set latticeSize uniform:", lSide);
   }
 
-  const upsampleLoc = rotorProgram.uniformLocations.get("u_upsample");
+  const upsampleLoc = program.uniformLocations.get("u_upsample");
   if (upsampleLoc !== undefined && upsampleLoc !== null) {
     gl.uniform1f(upsampleLoc, upsample);
     console.log("[WebGL2 Render] Set upsample uniform:", upsample);

@@ -33,6 +33,38 @@ void main() {
 `;
 
 /**
+ * Debug fragment shader that visualizes texture data directly
+ * Helps diagnose if textures are being uploaded correctly
+ */
+export const debugTextureShader = `#version 300 es
+
+precision highp float;
+
+in vec2 v_uv;
+
+uniform sampler2D u_thetaTexture;
+uniform sampler2D u_omegaTexture;
+uniform vec2 u_latticeSize;
+
+out vec4 fragColor;
+
+void main() {
+    vec2 latticeCoord = v_uv * u_latticeSize;
+    ivec2 cell = ivec2(floor(latticeCoord));
+    
+    float theta = texelFetch(u_thetaTexture, cell, 0).r;
+    float omega = texelFetch(u_omegaTexture, cell, 0).r;
+    
+    // Visualize theta as red channel, omega as green channel
+    // This helps us see if data is in the textures
+    float thetaNorm = (theta + 3.14159) / (2.0 * 3.14159); // Normalize to [0,1]
+    float omegaNorm = min(abs(omega) / 5.0, 1.0); // Normalize omega magnitude
+    
+    fragColor = vec4(thetaNorm, omegaNorm, 0.0, 1.0);
+}
+`;
+
+/**
  * Fragment shader for rotor visualization
  * Renders anti-aliased disks with color based on angle (hue) and energy (value)
  * Uses SDF (Signed Distance Field) for smooth edges
