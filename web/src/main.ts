@@ -14,6 +14,7 @@ import {
 import {
   bindRotorStateTextures as _bindRotorStateTextures,
   checkWebGL2Support,
+  createArrowGeometry,
   createFullScreenQuad,
   createRotorStateTextures,
   createShaderProgram,
@@ -27,6 +28,8 @@ import {
   type WebGLContext,
 } from "./webgl.ts";
 import {
+  arrowFragmentShader,
+  arrowVertexShader,
   debugTextureShader,
   fullScreenQuadVertexShader,
   rotorFragmentShader,
@@ -45,7 +48,10 @@ const overlayCanvas = document.getElementById(
 let webgl: WebGLContext | null = null;
 let rotorProgram: ShaderProgram | null = null;
 let debugProgram: ShaderProgram | null = null;
+let arrowProgram: ShaderProgram | null = null;
 let fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
+  null;
+let arrowGeometry: { vao: WebGLVertexArrayObject; vertexCount: number } | null =
   null;
 let webglContextLost = false;
 let rotorTextures: RotorStateTextures | null = null;
@@ -128,10 +134,31 @@ function initWebGLResources(): boolean {
     return false;
   }
 
+  // Create arrow rendering shader program
+  arrowProgram = createShaderProgram(
+    gl,
+    arrowVertexShader,
+    arrowFragmentShader,
+    ["a_position"],
+    ["u_thetaTexture", "u_latticeSize", "u_upsample"],
+  );
+
+  if (!arrowProgram) {
+    console.error("Failed to create arrow shader program");
+    return false;
+  }
+
   // Create full-screen quad
   fullScreenQuad = createFullScreenQuad(gl);
   if (!fullScreenQuad) {
     console.error("Failed to create full-screen quad");
+    return false;
+  }
+
+  // Create arrow geometry
+  arrowGeometry = createArrowGeometry(gl);
+  if (!arrowGeometry) {
+    console.error("Failed to create arrow geometry");
     return false;
   }
 
@@ -217,6 +244,55 @@ function renderRotorsWebGL2(
 
   // Force flush to ensure rendering completes
   gl.flush();
+}
+
+/**
+ * Render direction arrows using WebGL2 instancing
+ */
+function renderArrowsWebGL2(
+  lSide: number,
+  upsample: number,
+): void {
+  if (
+    !webgl || !arrowGeometry || !rotorTextures || !arrowProgram ||
+    webglContextLost
+  ) {
+    return;
+  }
+
+  const { gl } = webgl;
+
+  gl.useProgram(arrowProgram.program);
+
+  // Enable blending for arrows
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  // Bind theta texture
+  const thetaLoc = arrowProgram.uniformLocations.get("u_thetaTexture");
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, rotorTextures.thetaTexture);
+  if (thetaLoc !== undefined && thetaLoc !== null) {
+    gl.uniform1i(thetaLoc, 0);
+  }
+
+  // Set uniforms
+  const latticeSizeLoc = arrowProgram.uniformLocations.get("u_latticeSize");
+  if (latticeSizeLoc !== undefined && latticeSizeLoc !== null) {
+    gl.uniform2f(latticeSizeLoc, lSide, lSide);
+  }
+
+  const upsampleLoc = arrowProgram.uniformLocations.get("u_upsample");
+  if (upsampleLoc !== undefined && upsampleLoc !== null) {
+    gl.uniform1f(upsampleLoc, upsample);
+  }
+
+  // Draw instanced arrows
+  gl.bindVertexArray(arrowGeometry.vao);
+  gl.drawArraysInstanced(gl.TRIANGLES, 0, arrowGeometry.vertexCount, lSide * lSide);
+  gl.bindVertexArray(null);
+
+  gl.disable(gl.BLEND);
 }
 
 /**
@@ -402,9 +478,13 @@ worker.onmessage = (e) => {
         webglCanvas.style.height = canvas.style.height;
       }
       renderRotorsWebGL2(lSide, upsample);
+      if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
+        renderArrowsWebGL2(lSide, upsample);
+      }
       // Still need to close the ImageBitmap even though we're not using it
       imageBitmap.close();
     } else {
+
 
       // Canvas2D rendering (fallback)
       if (bitmapCtx) {
@@ -420,6 +500,7 @@ worker.onmessage = (e) => {
 
     // Draw arrows if enabled and disks are large enough
     if (
+      !useWebGL2Rendering &&
       controls.arrowCheck.checked &&
       thetaBuf &&
       upsample >= 4 &&
@@ -427,6 +508,7 @@ worker.onmessage = (e) => {
     ) {
       drawArrows(overlayCtx, new Float64Array(thetaBuf), lSide, upsample);
     }
+
 
     const now = performance.now();
     if (now - lastUiUpdate > UI_UPDATE_INTERVAL_MS) {

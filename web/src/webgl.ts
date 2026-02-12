@@ -173,6 +173,53 @@ export function createFullScreenQuad(
 }
 
 /**
+ * Create arrow geometry for instanced rendering
+ * A simple line or narrow triangle pointing along +Y (local)
+ */
+export function createArrowGeometry(
+  gl: WebGL2RenderingContext,
+): { vao: WebGLVertexArrayObject; vertexCount: number } | null {
+  // Define a simple arrow shape pointing down (along +Y)
+  // Vertex positions in local coordinates [-1, 1]
+  // We'll center it such that (0,0) is the center of the arrow length
+  const positions = new Float32Array([
+    // Shaft (narrow rectangle)
+    -0.02, -0.4,
+     0.02, -0.4,
+    -0.02,  0.2,
+    -0.02,  0.2,
+     0.02, -0.4,
+     0.02,  0.2,
+     
+    // Head (triangle)
+    -0.08,  0.1,
+     0.08,  0.1,
+     0.0,   0.4,
+  ]);
+
+  const vao = gl.createVertexArray();
+  if (!vao) return null;
+
+  const vbo = gl.createBuffer();
+  if (!vbo) {
+    gl.deleteVertexArray(vao);
+    return null;
+  }
+
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  gl.bindVertexArray(null);
+  gl.deleteBuffer(vbo);
+
+  return { vao, vertexCount: 9 };
+}
+
+/**
  * Initialize WebGL2 context with optional attributes
  */
 export function initWebGL2(

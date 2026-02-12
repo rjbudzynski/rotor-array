@@ -141,3 +141,81 @@ void main() {
     fragColor = vec4(rgb, alpha);
 }
 `;
+
+/**
+ * Vertex shader for instanced arrow rendering
+ * Each instance is one arrow. Attributes define the unit arrow geometry.
+ * Uniforms and texture sampling handle rotation and positioning.
+ */
+export const arrowVertexShader = `#version 300 es
+
+layout(location = 0) in vec2 a_position; // Local arrow position (-1 to 1 range)
+
+uniform sampler2D u_thetaTexture;
+uniform vec2 u_latticeSize;
+uniform float u_upsample;
+
+out float v_alpha;
+
+void main() {
+    // Determine which cell this instance belongs to
+    int lSide = int(u_latticeSize.x);
+    int row = gl_InstanceID / lSide;
+    int col = gl_InstanceID % lSide;
+    ivec2 cell = ivec2(col, row);
+    
+    // Sample angle for this rotor
+    float theta = texelFetch(u_thetaTexture, cell, 0).r;
+    
+    // Rotation matrix (theta=0 points down, increases CCW)
+    // In our coordinate system:
+    // x' = x*cos(th) - y*sin(th)
+    // y' = x*sin(th) + y*cos(th)
+    // But theta=0 is down (0, 1), so we rotate (0, 1) by theta.
+    float c = cos(theta);
+    float s = sin(theta);
+    mat2 rot = mat2(c, s, -s, c);
+    
+    // Local arrow geometry is centered at (0,0)
+    vec2 rotatedPos = rot * a_position;
+    
+    // Scale arrow to fit in cell (cell size is 1.0 in lattice space)
+    // The geometry is defined in [-1, 1] range approximately.
+    // Use upsample to match legacy arrow size if desired, 
+    // but here we work in lattice space where each cell is 1.0x1.0.
+    vec2 scaledPos = rotatedPos * 0.9; // 0.9 of cell width
+    
+    // Center of the cell in [0, L] space
+    vec2 cellCenter = vec2(float(col) + 0.5, float(row) + 0.5);
+    
+    // Position in [0, L] lattice space
+    vec2 latticePos = cellCenter + scaledPos;
+    
+    // Transform to clip space [-1, 1]
+    // Simulation row 0 is at top, so we flip Y: Y_clip = 1.0 - 2.0 * (Y_lat / L)
+    vec2 clipPos;
+    clipPos.x = (latticePos.x / u_latticeSize.x) * 2.0 - 1.0;
+    clipPos.y = 1.0 - (latticePos.y / u_latticeSize.y) * 2.0;
+    
+    gl_Position = vec4(clipPos, 0.0, 1.0);
+    
+    // Pass alpha for fading if needed
+    v_alpha = 0.8;
+}
+`;
+
+/**
+ * Fragment shader for instanced arrow rendering
+ */
+export const arrowFragmentShader = `#version 300 es
+
+precision highp float;
+
+in float v_alpha;
+out vec4 fragColor;
+
+void main() {
+    fragColor = vec4(1.0, 1.0, 1.0, v_alpha);
+}
+`;
+
