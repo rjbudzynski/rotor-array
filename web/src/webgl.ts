@@ -180,21 +180,21 @@ export function createArrowGeometry(
   gl: WebGL2RenderingContext,
 ): { vao: WebGLVertexArrayObject; vertexCount: number } | null {
   // Define a simple arrow shape pointing down (along +Y)
-  // Vertex positions in local coordinates [-1, 1]
-  // We'll center it such that (0,0) is the center of the arrow length
+  // Vertex positions in local coordinates [-0.5, 0.5]
+  // Centered at (0,0)
   const positions = new Float32Array([
     // Shaft (narrow rectangle)
-    -0.02, -0.4,
-     0.02, -0.4,
-    -0.02,  0.2,
-    -0.02,  0.2,
-     0.02, -0.4,
-     0.02,  0.2,
+    -0.03, -0.45,
+     0.03, -0.45,
+    -0.03,  0.15,
+    -0.03,  0.15,
+     0.03, -0.45,
+     0.03,  0.15,
      
     // Head (triangle)
-    -0.08,  0.1,
-     0.08,  0.1,
-     0.0,   0.4,
+    -0.12,  0.15,
+     0.12,  0.15,
+     0.0,   0.45,
   ]);
 
   const vao = gl.createVertexArray();

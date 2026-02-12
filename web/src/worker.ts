@@ -135,6 +135,10 @@ self.onmessage = async (e) => {
         omegaPool.push(payload.omega);
       }
       break;
+
+    case "requestFrame":
+      renderFrame();
+      break;
   }
 };
 
