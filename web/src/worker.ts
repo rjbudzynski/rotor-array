@@ -17,7 +17,9 @@ let engine: WasmSimulationEngine | null = null;
 let visualizer: WasmVisualizer | null = null;
 let wasmExports: WasmExports | null = null;
 let currentLSide = 0;
+let currentUpsample = 1;
 const canUseOffscreenCanvas = typeof OffscreenCanvas !== "undefined";
+
 let offscreenCanvas: OffscreenCanvas | null = null;
 let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
 let offscreenSize = 0;
@@ -30,8 +32,10 @@ let lastEmit = 0;
 let lastEnergyEmit = 0;
 let initialEnergyPerNode = 0;
 let showArrows = true;
+let renderMode: "webgl2" | "canvas2d" = "webgl2";
 
 let initPromise: Promise<WasmExports> | null = null;
+
 let rendering = false;
 
 function ensureInit(): Promise<WasmExports> {
@@ -66,10 +70,19 @@ self.onmessage = async (e) => {
         showArrows: showArrowsPayload,
       } = payload;
       currentLSide = lSide;
+      currentUpsample = upsample;
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);
+
       engine.set_state(theta, omega, 0);
-      visualizer = new WasmVisualizer(lSide, upsample);
+      
+      if (!visualizer) {
+        visualizer = new WasmVisualizer(lSide, upsample);
+      } else {
+        visualizer.set_dimensions(lSide, upsample);
+      }
+      
       if (typeof showArrowsPayload === "boolean") {
+
         showArrows = showArrowsPayload;
       }
 
@@ -107,12 +120,31 @@ self.onmessage = async (e) => {
         showArrows = payload.showArrows;
       }
       break;
+
+    case "setRenderMode":
+      if (payload.mode === "webgl2" || payload.mode === "canvas2d") {
+        renderMode = payload.mode;
+      }
+      break;
+
+    case "returnBuffers":
+      if (payload.theta instanceof ArrayBuffer) {
+        thetaPool.push(payload.theta);
+      }
+      if (payload.omega instanceof ArrayBuffer) {
+        omegaPool.push(payload.omega);
+      }
+      break;
   }
 };
 
 // Reusable buffers to avoid per-frame allocations
-let thetaBuffer: Float64Array | null = null;
-let omegaBuffer: Float64Array | null = null;
+const thetaPool: ArrayBuffer[] = [];
+const omegaPool: ArrayBuffer[] = [];
+let thetaBuffer: Float32Array | null = null;
+let omegaBuffer: Float32Array | null = null;
+
+
 
 // Always transfer raw arrays for WebGL2 texture pipeline
 const transferRawArrays = true;
@@ -124,62 +156,107 @@ async function renderFrame() {
 
   try {
     const N = currentLSide * currentLSide;
-    visualizer.update(engine.get_theta_ptr(), engine.get_omega_ptr(), N);
-
     const memory = wasmExports.memory.buffer;
-
-    // Get WASM memory pointers and sizes
-    const rgbaPtr = visualizer.get_rgba_ptr();
-    const rgbaSize = visualizer.get_rgba_size();
     const thetaPtr = engine.get_theta_ptr();
     const omegaPtr = engine.get_omega_ptr();
 
-    // Create ImageData from WASM memory (zero-copy view)
-    const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
-    const canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
-    const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
+    let imageBitmap: ImageBitmap | undefined;
+    let canvasSize = 0;
 
-    // Create ImageBitmap for efficient transfer to main thread
-    let imageBitmap: ImageBitmap;
-    try {
-      // Direct creation from ImageData is usually well-optimized
-      imageBitmap = await createImageBitmap(imageData);
-    } catch (err) {
-      console.error("Failed to create ImageBitmap from ImageData:", err);
-      // Fallback: try using OffscreenCanvas if available
-      if (canUseOffscreenCanvas) {
-        if (!offscreenCanvas || offscreenSize !== canvasSize) {
-          offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
-          offscreenCtx = offscreenCanvas.getContext("2d");
-          offscreenSize = canvasSize;
-        }
-        if (offscreenCanvas && offscreenCtx) {
-          offscreenCtx.putImageData(imageData, 0, 0);
-          imageBitmap = offscreenCanvas.transferToImageBitmap();
+    if (renderMode === "canvas2d") {
+      visualizer.update(thetaPtr, omegaPtr, N);
+
+      // Get WASM memory pointers and sizes for pixel data
+      const rgbaPtr = visualizer.get_rgba_ptr();
+      const rgbaSize = visualizer.get_rgba_size();
+
+      // Create ImageData from WASM memory (zero-copy view)
+      const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
+      canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
+      const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
+
+      // Create ImageBitmap for efficient transfer to main thread
+      try {
+        // Direct creation from ImageData is usually well-optimized
+        imageBitmap = await createImageBitmap(imageData);
+      } catch (err) {
+        console.error("Failed to create ImageBitmap from ImageData:", err);
+        // Fallback: try using OffscreenCanvas if available
+        if (canUseOffscreenCanvas) {
+          if (!offscreenCanvas || offscreenSize !== canvasSize) {
+            offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
+            offscreenCtx = offscreenCanvas.getContext("2d");
+            offscreenSize = canvasSize;
+          }
+          if (offscreenCanvas && offscreenCtx) {
+            offscreenCtx.putImageData(imageData, 0, 0);
+            imageBitmap = offscreenCanvas.transferToImageBitmap();
+          } else {
+            throw err;
+          }
         } else {
           throw err;
         }
-      } else {
-        throw err;
       }
+    } else {
+      // In WebGL2 mode, we still need to know the target canvas size for upsample calculations
+      canvasSize = currentLSide * currentUpsample;
     }
 
 
-    if (transferRawArrays || showArrows) {
-      // Create or resize reusable buffers for theta/omega
-      if (!thetaBuffer || thetaBuffer.length !== N) {
-        thetaBuffer = new Float64Array(N);
-      }
-      if (!omegaBuffer || omegaBuffer.length !== N) {
-        omegaBuffer = new Float64Array(N);
-      }
+            if (transferRawArrays || showArrows) {
 
-      // Copy theta/omega from WASM memory
-      const thetaView = new Float64Array(memory, thetaPtr, N);
-      const omegaView = new Float64Array(memory, omegaPtr, N);
-      thetaBuffer.set(thetaView);
-      omegaBuffer.set(omegaView);
-    }
+              // Create or reuse reusable buffers for theta/omega
+
+              // Check if current buffers are detached (byteLength === 0)
+
+              if (!thetaBuffer || thetaBuffer.byteLength === 0) {
+
+                const buf = thetaPool.pop();
+
+                if (buf && buf.byteLength === N * 4) {
+
+                  thetaBuffer = new Float32Array(buf);
+
+                } else {
+
+                  thetaBuffer = new Float32Array(N);
+
+                }
+
+              }
+
+              if (!omegaBuffer || omegaBuffer.byteLength === 0) {
+
+                const buf = omegaPool.pop();
+
+                if (buf && buf.byteLength === N * 4) {
+
+                  omegaBuffer = new Float32Array(buf);
+
+                } else {
+
+                  omegaBuffer = new Float32Array(N);
+
+                }
+
+              }
+
+        
+
+              // Copy theta/omega from WASM memory (F64 -> F32 conversion happens here)
+
+              const thetaView = new Float64Array(memory, thetaPtr, N);
+
+              const omegaView = new Float64Array(memory, omegaPtr, N);
+
+              thetaBuffer.set(thetaView);
+
+              omegaBuffer.set(omegaView);
+
+            }
+
+        
 
     const op = {
       r: engine.get_order_parameter_r(),
@@ -199,7 +276,7 @@ async function renderFrame() {
       upsample,
       orderParameter: op,
     } as {
-      imageBitmap: ImageBitmap;
+      imageBitmap?: ImageBitmap;
       lSide: number;
       canvasSize: number;
       upsample: number;
@@ -208,8 +285,12 @@ async function renderFrame() {
       omega?: ArrayBuffer;
     };
 
-    const transfer: Transferable[] = [imageBitmap];
+    const transfer: Transferable[] = [];
+    if (imageBitmap) {
+      transfer.push(imageBitmap);
+    }
     if ((transferRawArrays || showArrows) && thetaBuffer && omegaBuffer) {
+
       payload.theta = thetaBuffer.buffer as ArrayBuffer;
       payload.omega = omegaBuffer.buffer as ArrayBuffer;
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);

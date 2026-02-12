@@ -320,11 +320,11 @@ function initRotorTextures(lSide: number): boolean {
 }
 
 /**
- * Update rotor state textures from Float64Array data
+ * Update rotor state textures from Float32Array data
  */
 function updateRotorTextures(
-  theta: Float64Array,
-  omega: Float64Array,
+  theta: Float32Array,
+  omega: Float32Array,
 ): boolean {
   if (!webgl || !rotorTextures) return false;
   return updateRotorStateTextures(webgl.gl, rotorTextures, theta, omega);
@@ -348,6 +348,37 @@ function setStatus(msg: string, color: string) {
 
 setStatus("initializing...", "#2196f3");
 
+/**
+ * Return detached buffers to the worker for re-use to reduce GC pressure.
+ */
+function returnBuffersToWorker(theta?: ArrayBuffer, omega?: ArrayBuffer) {
+  const transfer: Transferable[] = [];
+  const payload: { theta?: ArrayBuffer; omega?: ArrayBuffer } = {};
+
+  if (theta && theta.byteLength > 0) {
+    payload.theta = theta;
+    transfer.push(theta);
+  }
+  if (omega && omega.byteLength > 0) {
+    payload.omega = omega;
+    transfer.push(omega);
+  }
+
+  if (transfer.length > 0) {
+    worker.postMessage({ type: "returnBuffers", payload }, transfer);
+  }
+}
+
+/**
+ * Notify worker of the current rendering mode to optimize performance
+ */
+function notifyWorkerOfRenderMode() {
+  worker.postMessage({
+    type: "setRenderMode",
+    payload: { mode: useWebGL2Rendering ? "webgl2" : "canvas2d" },
+  });
+}
+
 let _webglInitialized = false;
 try {
   _webglInitialized = initWebGL();
@@ -360,6 +391,7 @@ try {
     setStatus("fallback to Canvas2D", "#ff9800");
   }
 } catch (err) {
+
 
   console.error("[RotorArray] WebGL2 initialization failed:", err);
   setStatus(`error: ${err instanceof Error ? err.message : String(err)}`, "#f44336");
@@ -390,6 +422,7 @@ try {
       webglCanvas.style.display = "none";
       setStatus("Canvas2D active (click to use WebGL2)", "#2196f3");
     }
+    notifyWorkerOfRenderMode();
     console.log(`[RotorArray] Switched to ${useWebGL2Rendering ? "WebGL2" : "Canvas2D"} rendering`);
   });
 const mdCanvas = document.getElementById(
@@ -426,7 +459,12 @@ let displaySize = 0;
 worker.onmessage = (e) => {
   const { type, payload } = e.data;
 
+  if (type === "initialized") {
+    notifyWorkerOfRenderMode();
+  }
+
   if (type === "frame") {
+
     const {
       imageBitmap,
       theta: thetaBuf,
@@ -448,8 +486,9 @@ worker.onmessage = (e) => {
     // Initialize/resize rotor textures if needed
     if (webgl && thetaBuf && omegaBuf) {
       initRotorTextures(lSide);
-      updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
+      updateRotorTextures(new Float32Array(thetaBuf), new Float32Array(omegaBuf));
     }
+
 
 
     if (displaySize > 0) {
@@ -477,23 +516,24 @@ worker.onmessage = (e) => {
         webglCanvas.style.width = canvas.style.width;
         webglCanvas.style.height = canvas.style.height;
       }
-      renderRotorsWebGL2(lSide, upsample);
-      if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
-        renderArrowsWebGL2(lSide, upsample);
-      }
-      // Still need to close the ImageBitmap even though we're not using it
-      imageBitmap.close();
-    } else {
-
-
-      // Canvas2D rendering (fallback)
-      if (bitmapCtx) {
-        bitmapCtx.transferFromImageBitmap(imageBitmap);
-      } else if (ctx2d) {
-        ctx2d.drawImage(imageBitmap, 0, 0);
-      }
-      imageBitmap.close();
-    }
+                  renderRotorsWebGL2(lSide, upsample);
+                  if (controls.arrowCheck.checked && upsample >= 4 && lSide <= 60) {
+                    renderArrowsWebGL2(lSide, upsample);
+                  }
+                  // Still need to close the ImageBitmap if it exists
+                  imageBitmap?.close();
+                  returnBuffersToWorker(thetaBuf, omegaBuf);
+                } else if (imageBitmap) {
+                  // Canvas2D rendering (fallback)
+                  if (bitmapCtx) {
+                    bitmapCtx.transferFromImageBitmap(imageBitmap);
+                  } else if (ctx2d) {
+                    ctx2d.drawImage(imageBitmap, 0, 0);
+                  }
+                  imageBitmap.close();
+                  returnBuffersToWorker(thetaBuf, omegaBuf);
+                }
+                  
 
     // Clear overlay to prevent arrow artifacts from previous frames
     overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -506,8 +546,9 @@ worker.onmessage = (e) => {
       upsample >= 4 &&
       lSide <= 60
     ) {
-      drawArrows(overlayCtx, new Float64Array(thetaBuf), lSide, upsample);
+      drawArrows(overlayCtx, new Float32Array(thetaBuf), lSide, upsample);
     }
+
 
 
     const now = performance.now();
@@ -537,13 +578,13 @@ worker.onmessage = (e) => {
  * Draw direction arrows on the canvas.
  * Arrows are drawn when individual rotors are large enough to see.
  * @param ctx - Canvas rendering context
- * @param theta - Float64Array of rotor angles
+ * @param theta - Float32Array of rotor angles
  * @param lSide - Lattice side length (L)
  * @param upsample - Pixel multiplier per rotor
  */
 function drawArrows(
   ctx: CanvasRenderingContext2D,
-  theta: Float64Array,
+  theta: Float32Array,
   lSide: number,
   upsample: number,
 ) {

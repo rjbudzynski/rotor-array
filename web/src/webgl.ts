@@ -423,13 +423,12 @@ function checkGLError(gl: WebGL2RenderingContext, operation: string): void {
 
 /**
  * Update rotor state textures with new data
- * Converts Float64Array to Float32Array for GPU upload
  */
 export function updateRotorStateTextures(
   gl: WebGL2RenderingContext,
   textures: RotorStateTextures,
-  theta: Float64Array,
-  omega: Float64Array,
+  theta: Float32Array,
+  omega: Float32Array,
 ): boolean {
   const { thetaTexture, omegaTexture, lSide } = textures;
   const n = lSide * lSide;
@@ -438,10 +437,6 @@ export function updateRotorStateTextures(
     console.error("Data size mismatch with texture dimensions");
     return false;
   }
-
-  // Convert Float64Array to Float32Array for WebGL
-  const thetaF32 = new Float32Array(theta);
-  const omegaF32 = new Float32Array(omega);
 
   // Upload theta texture
   gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
@@ -454,7 +449,7 @@ export function updateRotorStateTextures(
     lSide,
     gl.RED,
     gl.FLOAT,
-    thetaF32,
+    theta,
   );
 
   checkGLError(gl, "theta texSubImage2D");
@@ -471,7 +466,7 @@ export function updateRotorStateTextures(
     lSide,
     gl.RED,
     gl.FLOAT,
-    omegaF32,
+    omega,
   );
   checkGLError(gl, "omega texSubImage2D");
 
