@@ -168,13 +168,12 @@ void main() {
     float theta = texelFetch(u_thetaTexture, cell, 0).r;
     
     // Rotation matrix (theta=0 points down, increases CCW)
-    // In our coordinate system:
-    // x' = x*cos(th) - y*sin(th)
-    // y' = x*sin(th) + y*cos(th)
-    // But theta=0 is down (0, 1), so we rotate (0, 1) by theta.
+    // In our coordinate system (X-right, Y-down):
+    // x' = x*cos(th) + y*sin(th)
+    // y' = -x*sin(th) + y*cos(th)
     float c = cos(theta);
     float s = sin(theta);
-    mat2 rot = mat2(c, s, -s, c);
+    mat2 rot = mat2(c, -s, s, c);
     
     // Local arrow geometry is centered at (0,0)
     vec2 rotatedPos = rot * a_position;

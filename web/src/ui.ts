@@ -58,7 +58,7 @@ export class MeanDirectionVisualizer {
     wheelCtx.putImageData(imgData, 0, 0);
   }
 
-  update(_r: number, meanCos: number, meanSin: number) {
+  update(r: number, meanCos: number, meanSin: number) {
     this.ensureWheel();
     if (this.wheelCanvas) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -67,18 +67,63 @@ export class MeanDirectionVisualizer {
 
     const size = this.canvas.width;
     const center = size / 2;
-    const radius = center * 0.9;
+    const maxRadius = center * 0.9;
 
-    const vecX = meanSin;
-    const vecY = meanCos;
+    // The order parameter vector length is scaled by the wheel radius
+    const vecX = meanSin * maxRadius;
+    const vecY = meanCos * maxRadius;
 
-    // Draw line from center to center + vec * radius
+    const angle = Math.atan2(meanSin, meanCos);
+    const arrowLen = r * maxRadius;
+
+    this.ctx.save();
+    this.ctx.translate(center, center);
+    this.ctx.rotate(-angle); // Rotate to align with the vector (minus because canvas Y is down but we want to rotate CCW)
+    // Wait, if theta=0 is down (meanSin=0, meanCos=1), angle is 0. 
+    // If meanSin=1, meanCos=0 (theta=pi/2, right), angle is pi/2.
+    // In canvas, rotate(pi/2) rotates clockwise.
+    // If theta=pi/2 (Right), we want the arrow to point right.
+    // Default orientation: point down (along +Y).
+    // So if angle is pi/2, we want to rotate 90 degrees clockwise?
+    // Let's re-evaluate:
+    // theta=0 -> (0, 1). Rotate(0) -> (0, 1) [Down]
+    // theta=pi/2 -> (1, 0). Rotate(pi/2) -> (-1, 0) [Left]? No, rotate(pi/2) in canvas is CW.
+    // (0, 1) rotated 90 deg CW is (-1, 0). Wait.
+    // Canvas coords: X right, Y down.
+    // (0, 1) is down.
+    // Rotate 90 CW: x' = -y, y' = x. So (0, 1) -> (-1, 0) [Left].
+    // We want (1, 0) [Right].
+    // So if theta=pi/2, we should rotate -pi/2?
+    this.ctx.rotate(-angle); 
+    // Now +Y is the direction of the arrow.
+    
+    const shaftWidth = Math.max(3, size / 30);
+    const headWidth = shaftWidth * 3;
+    const headLen = shaftWidth * 4;
+    
+    this.ctx.fillStyle = "white";
     this.ctx.strokeStyle = "black";
-    this.ctx.lineWidth = 4;
+    this.ctx.lineWidth = 1.5;
+
+    // Draw shaft from 0,0 to 0, arrowLen - headLen
+    const actualHeadLen = Math.min(headLen, arrowLen * 0.5);
+    const shaftLen = arrowLen - actualHeadLen;
+    
     this.ctx.beginPath();
-    this.ctx.moveTo(center, center);
-    this.ctx.lineTo(center + vecX * radius, center + vecY * radius);
+    this.ctx.rect(-shaftWidth/2, 0, shaftWidth, shaftLen);
+    this.ctx.fill();
     this.ctx.stroke();
+
+    // Draw head (triangle)
+    this.ctx.beginPath();
+    this.ctx.moveTo(-headWidth/2, shaftLen);
+    this.ctx.lineTo(headWidth/2, shaftLen);
+    this.ctx.lineTo(0, arrowLen);
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    this.ctx.restore();
   }
 }
 
