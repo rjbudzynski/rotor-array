@@ -51,7 +51,7 @@ let webglContextLost = false;
 let rotorTextures: RotorStateTextures | null = null;
 let _currentLSide = 0;
 let useWebGL2Rendering = false; // Toggle between Canvas2D and WebGL2
-const useDebugShader = true; // TEMP: Use debug shader to diagnose texture issues
+const useDebugShader = false; // Use real rotor shader by default
 
 /**
  * Initialize WebGL2 context and resources
@@ -164,11 +164,9 @@ function renderRotorsWebGL2(
 
   // Resize if needed
   const { width, height } = resizeCanvasToDisplaySize(webglCanvas);
-  console.log("[WebGL2 Render] Canvas size:", width, "x", height, "L=", lSide, "upsample=", upsample);
   
-  if (gl.canvas.width !== width || gl.canvas.height !== height) {
-    gl.viewport(0, 0, width, height);
-  }
+  // Always update viewport to match internal canvas size
+  gl.viewport(0, 0, width, height);
 
   // Clear canvas - use dark gray to distinguish from pure black
   gl.clearColor(0.1, 0.1, 0.1, 1.0);
@@ -182,11 +180,8 @@ function renderRotorsWebGL2(
     program = rotorProgram;
   }
   if (!program) {
-    console.error("[WebGL2 Render] No shader program available");
     return;
   }
-
-  console.log("[WebGL2 Render] Using shader:", useDebugShader ? "debug" : "rotor", "program:", program.program);
 
   // Enable blending for anti-aliased edges
   gl.enable(gl.BLEND);
@@ -198,37 +193,27 @@ function renderRotorsWebGL2(
   // Bind textures
   const thetaLoc = program.uniformLocations.get("u_thetaTexture");
   const omegaLoc = program.uniformLocations.get("u_omegaTexture");
-  console.log("[WebGL2 Render] Texture uniform locations:", { thetaLoc, omegaLoc });
   _bindRotorStateTextures(gl, rotorTextures, thetaLoc ?? null, omegaLoc ?? null, 0, 1);
 
   // Set uniforms
   const latticeSizeLoc = program.uniformLocations.get("u_latticeSize");
   if (latticeSizeLoc !== undefined && latticeSizeLoc !== null) {
     gl.uniform2f(latticeSizeLoc, lSide, lSide);
-    console.log("[WebGL2 Render] Set latticeSize uniform:", lSide);
   }
 
   const upsampleLoc = program.uniformLocations.get("u_upsample");
   if (upsampleLoc !== undefined && upsampleLoc !== null) {
     gl.uniform1f(upsampleLoc, upsample);
-    console.log("[WebGL2 Render] Set upsample uniform:", upsample);
   }
 
   // Draw full-screen quad
-  console.log("[WebGL2 Render] VAO:", fullScreenQuad.vao, "vertexCount:", fullScreenQuad.vertexCount);
   gl.bindVertexArray(fullScreenQuad.vao);
   gl.drawArrays(gl.TRIANGLES, 0, fullScreenQuad.vertexCount);
   gl.bindVertexArray(null);
-  console.log("[WebGL2 Render] Drew", fullScreenQuad.vertexCount, "vertices");
-
-  // Check for GL errors after draw
-  const drawError = gl.getError();
-  if (drawError !== gl.NO_ERROR) {
-    console.error("[WebGL2 Render] GL error after draw:", drawError);
-  }
 
   // Disable blending
   gl.disable(gl.BLEND);
+
 
   // Force flush to ensure rendering completes
   gl.flush();
@@ -291,11 +276,15 @@ let _webglInitialized = false;
 try {
   _webglInitialized = initWebGL();
   if (_webglInitialized) {
-    setStatus("ready", "#4caf50");
+    useWebGL2Rendering = true;
+    canvas.style.display = "none";
+    webglCanvas.style.display = "block";
+    setStatus("ready (WebGL2 active)", "#4caf50");
   } else {
     setStatus("fallback to Canvas2D", "#ff9800");
   }
 } catch (err) {
+
   console.error("[RotorArray] WebGL2 initialization failed:", err);
   setStatus(`error: ${err instanceof Error ? err.message : String(err)}`, "#f44336");
 }
@@ -382,12 +371,10 @@ worker.onmessage = (e) => {
 
     // Initialize/resize rotor textures if needed
     if (webgl && thetaBuf && omegaBuf) {
-      const texturesReady = initRotorTextures(lSide);
-      const updateSuccess = updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
-      console.log("[Frame] Textures ready:", texturesReady, "Update success:", updateSuccess);
-    } else {
-      console.log("[Frame] Skipping textures - webgl:", !!webgl, "theta:", !!thetaBuf, "omega:", !!omegaBuf);
+      initRotorTextures(lSide);
+      updateRotorTextures(new Float64Array(thetaBuf), new Float64Array(omegaBuf));
     }
+
 
     if (displaySize > 0) {
       const sizePx = `${displaySize}px`;
@@ -408,18 +395,17 @@ worker.onmessage = (e) => {
       if (webglCanvas.width !== canvas.width || webglCanvas.height !== canvas.height) {
         webglCanvas.width = canvas.width;
         webglCanvas.height = canvas.height;
-        console.log("[Frame] Resized webgl-canvas internal size to:", canvas.width, "x", canvas.height);
       }
       // Also ensure style matches
       if (webglCanvas.style.width !== canvas.style.width) {
         webglCanvas.style.width = canvas.style.width;
         webglCanvas.style.height = canvas.style.height;
-        console.log("[Frame] Resized webgl-canvas style to:", canvas.style.width, "x", canvas.style.height);
       }
       renderRotorsWebGL2(lSide, upsample);
       // Still need to close the ImageBitmap even though we're not using it
       imageBitmap.close();
     } else {
+
       // Canvas2D rendering (fallback)
       if (bitmapCtx) {
         bitmapCtx.transferFromImageBitmap(imageBitmap);

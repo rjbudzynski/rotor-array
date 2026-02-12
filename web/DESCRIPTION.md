@@ -4,11 +4,11 @@ This document describes the architecture, algorithms, and optimizations employed
 
 ## 1. System Architecture
 
-The application is built using a hybrid **TypeScript/Rust** architecture, leveraging **WebAssembly (WASM)** for high-performance physics and rendering.
+The application is built using a hybrid **TypeScript/Rust** architecture, leveraging **WebAssembly (WASM)** for high-performance physics and **WebGL2** for accelerated rendering.
 
-- **Main Thread (TypeScript):** Manages the user interface, input handling, real-time plotting (uPlot), and mathematical rendering (KaTeX). The UI is implemented with custom CSS using Flexbox for layout and direct DOM manipulation for dynamic controls.
-- **Simulation Worker (TypeScript/WASM):** Executes the physics engine and lattice visualization in a dedicated Web Worker to ensure UI responsiveness. Data is transferred to the main thread using **Transferable Objects** (ImageBitmap and ArrayBuffers) to minimize serialization overhead.
-- **Physics Core (Rust/WASM):** Implements the Hamiltonian dynamics and state-to-image rendering.
+- **Main Thread (TypeScript):** Manages the user interface, input handling, real-time plotting (uPlot), mathematical rendering (KaTeX), and the **WebGL2 Rendering Pipeline**.
+- **Simulation Worker (TypeScript/WASM):** Executes the physics engine in a dedicated Web Worker to ensure UI responsiveness. It transfers raw rotor state data ($\theta, \omega$) and fallback rendered frames to the main thread.
+- **Physics Core (Rust/WASM):** Implements the Hamiltonian dynamics and state-to-image rendering for legacy/fallback paths.
 
 ## 2. Algorithms & Physics
 
@@ -29,14 +29,16 @@ The system order parameter $r = |\frac{1}{N} \sum_{j=1}^N e^{i\theta_j}|$ is com
 ## 3. Visualization & Rendering
 
 ### 3.1 Hybrid Rendering Pipeline
-- **Lattice Disks (Rust):** Individual rotors are rendered as disks. The color is determined by a **Hue-Value** mapping:
-  - **Hue:** Angle $\theta \in [-\pi, \pi]$.
-  - **Value/Brightness:** Kinetic energy $\omega^2$.
-- **Anti-Aliasing:** A pre-computed alpha mask is applied to disks to provide smooth, anti-aliased edges without the overhead of per-pixel distance calculations.
-- **Overlay Arrows (TypeScript):** Directional arrows are rendered on a separate canvas overlay using the standard 2D API, allowing for resolution-independent vector graphics on top of the WASM-generated bitmap.
+- **WebGL2 Renderer (Primary):** Rotors are rendered as a full-screen quad using an optimized fragment shader. The rotor states are uploaded to the GPU as floating-point textures (R32F), and the shader performs Hue-Value mapping and SDF-based disk rendering on-the-fly.
+- **Lattice Disks (WASM Fallback):** For older browsers, rotors are rendered in the worker as disks using a pre-computed alpha mask.
+- **Overlay Arrows (TypeScript):** Directional arrows are currently rendered on a separate canvas overlay using the standard 2D API.
 
-### 3.2 Color Mapping
-A pre-computed **Color LUT** in Rust performs high-speed conversion from (Angle, Energy) to RGBA. This avoids expensive color space conversions during the rendering pass.
+### 3.2 Color Mapping & Anti-Aliasing
+- **SDF Disk Rendering:** WebGL2 uses Signed Distance Fields (SDF) in the fragment shader to provide high-quality anti-aliased edges.
+- **Adaptive LOD:** The system transitions from rendering disks to solid pixels when the lattice density exceeds the display resolution (upsample < 4), improving performance and visual clarity for large systems.
+- **Color Mapping:** A consistent **Hue-Value** mapping is shared across all rendering paths:
+  - **Hue:** Angle $\theta \in [-\pi, \pi]$ using a configurable offset for optimal aesthetics.
+  - **Value/Brightness:** Kinetic energy $\omega^2$ mapped via a `tanh` saturation curve.
 
 ## 4. Optimizations
 

@@ -141,21 +141,29 @@ async function renderFrame() {
 
     // Create ImageBitmap for efficient transfer to main thread
     let imageBitmap: ImageBitmap;
-    if (canUseOffscreenCanvas) {
-      if (!offscreenCanvas || offscreenSize !== canvasSize) {
-        offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
-        offscreenCtx = offscreenCanvas.getContext("2d");
-        offscreenSize = canvasSize;
-      }
-      if (offscreenCanvas && offscreenCtx) {
-        offscreenCtx.putImageData(imageData, 0, 0);
-        imageBitmap = offscreenCanvas.transferToImageBitmap();
-      } else {
-        imageBitmap = await createImageBitmap(imageData);
-      }
-    } else {
+    try {
+      // Direct creation from ImageData is usually well-optimized
       imageBitmap = await createImageBitmap(imageData);
+    } catch (err) {
+      console.error("Failed to create ImageBitmap from ImageData:", err);
+      // Fallback: try using OffscreenCanvas if available
+      if (canUseOffscreenCanvas) {
+        if (!offscreenCanvas || offscreenSize !== canvasSize) {
+          offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
+          offscreenCtx = offscreenCanvas.getContext("2d");
+          offscreenSize = canvasSize;
+        }
+        if (offscreenCanvas && offscreenCtx) {
+          offscreenCtx.putImageData(imageData, 0, 0);
+          imageBitmap = offscreenCanvas.transferToImageBitmap();
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
     }
+
 
     if (transferRawArrays || showArrows) {
       // Create or resize reusable buffers for theta/omega

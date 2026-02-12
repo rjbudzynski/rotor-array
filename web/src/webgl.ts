@@ -392,20 +392,12 @@ export function updateRotorStateTextures(
     return false;
   }
 
-  // Log some sample data values
-  console.log("[Texture Upload] Sample theta values:", theta[0], theta[1], theta[2]);
-  console.log("[Texture Upload] Sample omega values:", omega[0], omega[1], omega[2]);
-  console.log("[Texture Upload] L=", lSide, "n=", n);
-
   // Convert Float64Array to Float32Array for WebGL
   const thetaF32 = new Float32Array(theta);
   const omegaF32 = new Float32Array(omega);
 
-  console.log("[Texture Upload] F32 theta samples:", thetaF32[0], thetaF32[1], thetaF32[2]);
-
   // Upload theta texture
   gl.bindTexture(gl.TEXTURE_2D, thetaTexture);
-  checkGLError(gl, "before theta texSubImage2D");
   gl.texSubImage2D(
     gl.TEXTURE_2D,
     0,
@@ -417,6 +409,7 @@ export function updateRotorStateTextures(
     gl.FLOAT,
     thetaF32,
   );
+
   checkGLError(gl, "theta texSubImage2D");
 
   // Upload omega texture

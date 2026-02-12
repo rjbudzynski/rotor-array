@@ -92,10 +92,10 @@ impl WasmVisualizer {
     }
 
     pub fn get_rgba_ptr(&self) -> *const u8 {
-        self.visualizer.rgba_buffer.as_ptr()
+        self.visualizer.rgba_buffer.as_ptr() as *const u8
     }
 
     pub fn get_rgba_size(&self) -> usize {
-        self.visualizer.rgba_buffer.len()
+        self.visualizer.rgba_buffer.len() * 4
     }
 }

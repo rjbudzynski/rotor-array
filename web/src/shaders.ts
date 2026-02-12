@@ -50,19 +50,20 @@ out vec4 fragColor;
 
 void main() {
     // Map v_uv [0,1] to lattice coordinates [0, L-1]
-    // Use min to prevent out-of-bounds when v_uv = 1.0
-    vec2 latticeCoord = min(v_uv * u_latticeSize, u_latticeSize - 1.0);
-    ivec2 cell = ivec2(floor(latticeCoord));
+    // Flip Y because v_uv.y=0 is bottom but simulation row 0 is top
+    vec2 flippedUV = vec2(v_uv.x, 1.0 - v_uv.y);
+    vec2 latticeCoord = flippedUV * u_latticeSize;
+    ivec2 cell = clamp(ivec2(floor(latticeCoord)), ivec2(0), ivec2(u_latticeSize) - 1);
     
     float theta = texelFetch(u_thetaTexture, cell, 0).r;
     float omega = texelFetch(u_omegaTexture, cell, 0).r;
     
     // Visualize theta as red channel, omega as green channel
     // This helps us see if data is in the textures
-    float thetaNorm = (theta + 3.14159) / (2.0 * 3.14159); // Normalize to [0,1]
+    float thetaNorm = (theta + 3.14159265359) / (2.0 * 3.14159265359); // Normalize to [0,1]
     float omegaNorm = min(abs(omega) / 5.0, 1.0); // Normalize omega magnitude
     
-    fragColor = vec4(thetaNorm, omegaNorm, 0.0, 1.0);
+    fragColor = vec4(thetaNorm, omegaNorm, 0.5, 1.0);
 }
 `;
 
@@ -93,9 +94,10 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
     // Calculate which rotor cell we're in
-    // Use min to prevent out-of-bounds when v_uv = 1.0
-    vec2 latticeCoord = min(v_uv * u_latticeSize, u_latticeSize - 1.0);
-    ivec2 cell = ivec2(floor(latticeCoord));
+    // Flip Y because v_uv.y=0 is bottom but simulation row 0 is top
+    vec2 flippedUV = vec2(v_uv.x, 1.0 - v_uv.y);
+    vec2 latticeCoord = flippedUV * u_latticeSize;
+    ivec2 cell = clamp(ivec2(floor(latticeCoord)), ivec2(0), ivec2(u_latticeSize) - 1);
     
     // Sample theta and omega from textures
     float theta = texelFetch(u_thetaTexture, cell, 0).r;
@@ -110,30 +112,32 @@ void main() {
     // Calculate distance from center (for disk shape)
     float dist = length(centerOffset);
     
-    // Disk radius (slightly less than 0.5 to leave gap between rotors)
-    float diskRadius = 0.45;
-    
-    // Anti-aliased edge using smoothstep
-    float alpha = 1.0 - smoothstep(diskRadius - 0.02, diskRadius, dist);
+    // Transition from disks to solid squares (pixels) when small (upsample < 4)
+    // This matches the behavior in visualizer.rs
+    float alpha = 1.0;
+    if (u_upsample >= 4.0) {
+        float diskRadius = 0.45;
+        // 1-pixel wide transition for consistent anti-aliasing
+        float halfEdge = 0.5 / u_upsample;
+        alpha = 1.0 - smoothstep(diskRadius - halfEdge, diskRadius + halfEdge, dist);
+    }
     
     // Map theta to hue: theta in [-PI, PI] -> hue in [0, 1]
-    // theta = 0 (pointing down) -> hue = 0 (red)
-    // theta increases CCW -> hue increases
-    float hue = (theta / (2.0 * 3.14159265359)) + 0.5;
+    // Uses HUE_OFFSET = 0.666 to match colors.ts/colors.rs
+    float hue = (theta / (2.0 * 3.14159265359)) + 0.666;
     hue = fract(hue); // Wrap to [0, 1]
     
     // Map omega^2 to value (brightness)
     // omega^2 represents kinetic energy
     float energy = omega * omega;
-    // Map energy to value with some contrast
-    // Zero energy -> dim but visible (0.2)
-    // High energy -> bright (up to 1.0)
-    float value = 0.2 + 0.8 * min(energy / 5.0, 1.0);
+    // Map energy to value with tanh curve to match colors.ts/colors.rs
+    // val_min = 0.4, val_max = 0.8
+    float value = 0.4 + (0.8 - 0.4) * tanh(energy / 5.0);
     
     // Convert HSV to RGB
     vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
     
-    // Output with anti-aliased alpha
+    // Output with alpha
     fragColor = vec4(rgb, alpha);
 }
 `;
