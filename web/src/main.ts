@@ -104,10 +104,10 @@ class App {
   }
 
   private setStatus(msg: string, color: string) {
-    this.webglStatusEl.textContent = `WebGL2: ${msg}`;
+    this.webglStatusEl.textContent = msg;
     this.webglStatusEl.style.background = color;
     this.webglStatusEl.style.color = color === "#ffeb3b" ? "#000" : "#fff";
-    console.log(`[RotorArray] WebGL2 status: ${msg}`);
+    console.log(`[RotorArray] Status: ${msg}`);
   }
 
   private init() {
@@ -118,9 +118,9 @@ class App {
         this.useWebGL2Rendering = true;
         this.canvas.style.display = "none";
         this.webglCanvas.style.display = "block";
-        this.setStatus("ready (WebGL2 active)", "#4caf50");
+        this.setStatus("WebGL2", "#4caf50");
       } else {
-        this.setStatus("fallback to Canvas2D", "#ff9800");
+        this.setStatus("Canvas2D", "#ff9800");
       }
     } catch (err) {
       console.error("[RotorArray] WebGL2 initialization failed:", err);
@@ -280,11 +280,11 @@ class App {
       this.webglCanvas.style.height = this.canvas.style.height;
       this.canvas.style.display = "none";
       this.webglCanvas.style.display = "block";
-      this.setStatus("WebGL2 active (click to use Canvas2D)", "#4caf50");
+      this.setStatus("WebGL2", "#4caf50");
     } else {
       this.canvas.style.display = "block";
       this.webglCanvas.style.display = "none";
-      this.setStatus("Canvas2D active (click to use WebGL2)", "#2196f3");
+      this.setStatus("Canvas2D", "#2196f3");
     }
     this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
     this.simManager.requestFrame();
