@@ -60,7 +60,29 @@ class App {
     this.webglStatusEl = this.createStatusIndicator();
     
     this.setupListeners();
+    this.setupResizeObserver();
     this.init();
+  }
+
+  private setupResizeObserver() {
+    const container = document.getElementById("canvas-container");
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        const size = Math.max(100, Math.min(width - CANVAS_PADDING, height - CANVAS_PADDING));
+        
+        if (size !== this.displaySize) {
+          this.displaySize = size;
+          // Trigger a re-calculation of upsample without full reset
+          const lSide = parseInt(this.controls.lInput.value) || DEFAULT_LATTICE_SIZE;
+          const upsample = Math.max(1, Math.floor(this.displaySize / lSide));
+          this.simManager.updateUpsample(upsample);
+        }
+      }
+    });
+    observer.observe(container);
   }
 
   private createStatusIndicator(): HTMLElement {
@@ -181,18 +203,6 @@ class App {
       this.renderer.updateTextures(lSide, new Float32Array(thetaBuf), new Float32Array(omegaBuf));
     }
 
-    if (this.displaySize > 0) {
-      const sizePx = `${this.displaySize}px`;
-      if (this.canvas.style.width !== sizePx) {
-        this.canvas.style.width = sizePx;
-        this.canvas.style.height = sizePx;
-        this.overlayCanvas.style.width = sizePx;
-        this.overlayCanvas.style.height = sizePx;
-        this.webglCanvas.style.width = sizePx;
-        this.webglCanvas.style.height = sizePx;
-      }
-    }
-
     if (this.useWebGL2Rendering) {
       this.renderer.render(lSide, upsample, this.controls.arrowCheck.checked);
       imageBitmap?.close();
@@ -238,14 +248,6 @@ class App {
     const size = Math.max(100, Math.min(width, height));
     const upsample = Math.max(1, Math.floor(size / lSide));
     this.displaySize = size;
-    
-    const sizePx = `${this.displaySize}px`;
-    this.canvas.style.width = sizePx;
-    this.canvas.style.height = sizePx;
-    this.overlayCanvas.style.width = sizePx;
-    this.overlayCanvas.style.height = sizePx;
-    this.webglCanvas.style.width = sizePx;
-    this.webglCanvas.style.height = sizePx;
 
     this.simManager.reset({
       lSide,

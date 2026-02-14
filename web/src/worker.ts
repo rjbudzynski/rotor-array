@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 import init, {
   WasmSimulationEngine,
   WasmVisualizer,
@@ -48,6 +49,10 @@ function ensureInit(): Promise<WasmExports> {
   }
   return initPromise;
 }
+
+self.onerror = (e) => {
+  console.error("[RotorArrayWorker] Unhandled error:", e);
+};
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -138,6 +143,13 @@ self.onmessage = async (e) => {
 
     case "requestFrame":
       renderFrame();
+      break;
+
+    case "updateUpsample":
+      if (typeof payload.upsample === "number") {
+        currentUpsample = payload.upsample;
+        visualizer?.set_dimensions(currentLSide, currentUpsample);
+      }
       break;
   }
 };
@@ -262,7 +274,8 @@ async function renderFrame() {
 
         
 
-    const opArr = engine.get_order_parameter(); // [r, meanCos, meanSin] — single pass
+    // deno-lint-ignore no-explicit-any
+    const opArr = (engine as any).get_order_parameter(); // [r, meanCos, meanSin] — single pass
     const op = {
       r: opArr[0],
       meanCos: opArr[1],
@@ -301,7 +314,7 @@ async function renderFrame() {
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
     }
 
-    (postMessage as typeof self.postMessage)({
+    self.postMessage({
       type: "frame",
       payload,
     }, transfer);

@@ -101,6 +101,13 @@ export class SimulationManager {
     });
   }
 
+  public updateUpsample(upsample: number) {
+    this.worker.postMessage({
+      type: "updateUpsample",
+      payload: { upsample },
+    });
+  }
+
   public setRenderMode(mode: "webgl2" | "canvas2d") {
     this.worker.postMessage({
       type: "setRenderMode",

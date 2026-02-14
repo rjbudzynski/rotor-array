@@ -70,7 +70,7 @@ export class MeanDirectionVisualizer {
     const maxRadius = center * 0.9;
 
     const angle = Math.atan2(meanSin, meanCos);
-    const arrowLen = r * maxRadius;
+    const _arrowLen = r * maxRadius;
 
     this.ctx.save();
     this.ctx.translate(center, center);
@@ -427,6 +427,7 @@ export class OrderPlot {
   uplot: {
     setData: (data: [number[], number[]]) => void;
     setScale: (key: string, opts: { min: number; max: number }) => void;
+    setSize: (size: { width: number; height: number }) => void;
   };
   data: [number[], number[]];
   private windowSeconds = PLOT_WINDOW_SECONDS;
@@ -441,6 +442,7 @@ export class OrderPlot {
     ) => {
       setData: (data: [number[], number[]]) => void;
       setScale: (key: string, opts: { min: number; max: number }) => void;
+      setSize: (size: { width: number; height: number }) => void;
     } = uPlot as // deno-lint-ignore no-explicit-any
     any,
   ) {
@@ -449,8 +451,8 @@ export class OrderPlot {
     this.data = [[], []]; // time, r
 
     const opts = {
-      width: el?.clientWidth || 300,
-      height: 150,
+      width: el.clientWidth,
+      height: el.clientHeight || 150,
       cursor: { show: false },
       legend: { show: false },
       padding: [8, 12, 12, 2],
@@ -473,6 +475,17 @@ export class OrderPlot {
     };
 
     this.uplot = new uplotCtor(opts, this.data, el);
+
+    // Watch for size changes
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          this.uplot.setSize({ width, height });
+        }
+      }
+    });
+    observer.observe(el);
   }
 
   push(t: number, r: number) {
