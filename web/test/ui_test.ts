@@ -8,6 +8,15 @@ function setupDom(html: string) {
   // deno_dom uses its own Document type; assign globally for code under test.
   // deno-lint-ignore no-explicit-any
   (globalThis as any).document = doc;
+
+  // Polyfill/Mock ResizeObserver for Deno tests
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+
   return doc;
 }
 
@@ -37,7 +46,7 @@ Deno.test("ControlPanel reset emits parsed values", () => {
   controls.kInput.value = "2.5";
   controls.p2Input.value = "3.0";
   controls.p3Input.value = "0.25";
-  controls.tempInput.value = "50"; // 0.5
+  controls.tempInput.value = "0.5";
 
   let captured:
     | { preset: string; k: number; p2: number; p3: number; temp: number }

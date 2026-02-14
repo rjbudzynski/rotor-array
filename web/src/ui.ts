@@ -217,8 +217,9 @@ export class ControlPanel {
     this.jInput = document.createElement("input");
     this.jInput.type = "range";
     this.jInput.min = "0";
-    this.jInput.max = "2000";
-    this.jInput.value = "100"; // 1.0
+    this.jInput.max = "20";
+    this.jInput.step = "0.01";
+    this.jInput.value = "1.00";
     const jG = group("Coupling (J): 1.00", this.jInput);
     this.jLabel = jG.lbl;
     this.container.appendChild(jG.div);
@@ -227,8 +228,9 @@ export class ControlPanel {
     this.mInput = document.createElement("input");
     this.mInput.type = "range";
     this.mInput.min = "0";
-    this.mInput.max = "1000";
-    this.mInput.value = "0";
+    this.mInput.max = "10";
+    this.mInput.step = "0.01";
+    this.mInput.value = "0.00";
     const mG = group("Field (M): 0.00", this.mInput);
     this.mLabel = mG.lbl;
     this.container.appendChild(mG.div);
@@ -236,9 +238,10 @@ export class ControlPanel {
     // Time Scale
     this.timeInput = document.createElement("input");
     this.timeInput.type = "range";
-    this.timeInput.min = "10";
-    this.timeInput.max = "500";
-    this.timeInput.value = "100"; // 1.0
+    this.timeInput.min = "0.1";
+    this.timeInput.max = "5";
+    this.timeInput.step = "0.1";
+    this.timeInput.value = "1.0";
     const timeG = group("Time Scale: 1.0x", this.timeInput);
     this.timeLabel = timeG.lbl;
     this.container.appendChild(timeG.div);
@@ -247,8 +250,9 @@ export class ControlPanel {
     this.tempInput = document.createElement("input");
     this.tempInput.type = "range";
     this.tempInput.min = "0";
-    this.tempInput.max = "200";
-    this.tempInput.value = "0";
+    this.tempInput.max = "2";
+    this.tempInput.step = "0.01";
+    this.tempInput.value = "0.00";
     const tempG = group("Initial Temp (T): 0.00", this.tempInput);
     this.tempLabel = tempG.lbl;
     this.container.appendChild(tempG.div);
@@ -282,25 +286,25 @@ export class ControlPanel {
     this.lInput.addEventListener("change", () => this.updatePresetUI()); // Defaults might depend on L
 
     this.jInput.addEventListener("input", () => {
-      const val = parseFloat(this.jInput.value) / 100;
+      const val = parseFloat(this.jInput.value);
       this.jLabel.textContent = `Coupling (J): ${val.toFixed(2)}`;
       this.emitParamChange();
     });
 
     this.mInput.addEventListener("input", () => {
-      const val = parseFloat(this.mInput.value) / 100;
+      const val = parseFloat(this.mInput.value);
       this.mLabel.textContent = `Field (M): ${val.toFixed(2)}`;
       this.emitParamChange();
     });
 
     this.timeInput.addEventListener("input", () => {
-      const val = parseFloat(this.timeInput.value) / 100;
+      const val = parseFloat(this.timeInput.value);
       this.timeLabel.textContent = `Time Scale: ${val.toFixed(1)}x`;
       this.emitParamChange();
     });
 
     this.tempInput.addEventListener("input", () => {
-      const val = parseFloat(this.tempInput.value) / 100;
+      const val = parseFloat(this.tempInput.value);
       this.tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
     });
 
@@ -396,9 +400,9 @@ export class ControlPanel {
 
   emitParamChange() {
     if (this.onParamChange) {
-      const j = parseFloat(this.jInput.value) / 100;
-      const m = parseFloat(this.mInput.value) / 100;
-      const t = parseFloat(this.timeInput.value) / 100;
+      const j = parseFloat(this.jInput.value);
+      const m = parseFloat(this.mInput.value);
+      const t = parseFloat(this.timeInput.value);
       this.onParamChange(j, m, t);
     }
   }
@@ -417,7 +421,7 @@ export class ControlPanel {
       const k = parseFloat(this.kInput.value);
       const p2 = parseFloat(this.p2Input.value);
       const p3 = parseFloat(this.p3Input.value);
-      const temp = parseFloat(this.tempInput.value) / 100;
+      const temp = parseFloat(this.tempInput.value);
       this.onReset(name, k, p2, p3, temp);
     }
   }
