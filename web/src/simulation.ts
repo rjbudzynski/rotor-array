@@ -101,10 +101,11 @@ export class SimulationEngine {
 
   getOrderParameter(): OrderParameter {
     if (!this.wasm) return { r: 0, meanCos: 0, meanSin: 0 };
+    const arr = this.wasm.get_order_parameter();
     return {
-      r: this.wasm.get_order_parameter_r(),
-      meanCos: this.wasm.get_order_parameter_mean_cos(),
-      meanSin: this.wasm.get_order_parameter_mean_sin(),
+      r: arr[0],
+      meanCos: arr[1],
+      meanSin: arr[2],
     };
   }
 }

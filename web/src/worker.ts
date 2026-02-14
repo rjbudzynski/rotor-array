@@ -262,10 +262,11 @@ async function renderFrame() {
 
         
 
+    const opArr = engine.get_order_parameter(); // [r, meanCos, meanSin] — single pass
     const op = {
-      r: engine.get_order_parameter_r(),
-      meanCos: engine.get_order_parameter_mean_cos(),
-      meanSin: engine.get_order_parameter_mean_sin(),
+      r: opArr[0],
+      meanCos: opArr[1],
+      meanSin: opArr[2],
       t: engine.get_t(),
     };
 
