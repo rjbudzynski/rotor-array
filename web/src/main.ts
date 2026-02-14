@@ -70,10 +70,16 @@ class App {
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
-        const size = Math.max(100, Math.min(width - CANVAS_PADDING, height - CANVAS_PADDING));
+        const size = Math.max(100, Math.min(width, height));
         
         if (size !== this.displaySize) {
           this.displaySize = size;
+          const stack = document.getElementById("canvas-stack");
+          if (stack) {
+            stack.style.width = `${size}px`;
+            stack.style.height = `${size}px`;
+          }
+          
           // Trigger a re-calculation of upsample without full reset
           const lSide = parseInt(this.controls.lInput.value) || DEFAULT_LATTICE_SIZE;
           const upsample = Math.max(1, Math.floor(this.displaySize / lSide));
