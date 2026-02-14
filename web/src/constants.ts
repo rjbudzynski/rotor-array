@@ -116,9 +116,3 @@ export const MIN_LATTICE_SIZE = 2;
  * @remarks Subtracts 40px from container dimensions
  */
 export const CANVAS_PADDING = 40;
-
-/**
- * Slider scaling factor (percentage to decimal).
- * @remarks Divides slider values by 100
- */
-export const SLIDER_SCALE = 100;

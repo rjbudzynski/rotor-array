@@ -1,4 +1,4 @@
-import { SLIDER_SCALE } from "./constants.ts";
+// Removed SLIDER_SCALE import as it is no longer needed with native floating-point sliders.
 
 export interface FramePayload {
   imageBitmap?: ImageBitmap;
@@ -72,8 +72,8 @@ export class SimulationManager {
       type: "reset",
       payload: {
         lSide: params.lSide,
-        jCoupling: parseFloat(params.jInput) / SLIDER_SCALE,
-        mField: parseFloat(params.mInput) / SLIDER_SCALE,
+        jCoupling: parseFloat(params.jInput),
+        mField: parseFloat(params.mInput),
         theta: params.theta,
         omega: params.omega,
         upsample: params.upsample,

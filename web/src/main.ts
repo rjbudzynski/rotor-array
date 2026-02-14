@@ -8,7 +8,6 @@ import { generateInitialState } from "./presets.ts";
 import {
   CANVAS_PADDING,
   DEFAULT_LATTICE_SIZE,
-  SLIDER_SCALE,
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
 import { WebGLRenderer } from "./webgl_renderer.ts";
@@ -366,28 +365,28 @@ class App {
         if (params.lSide) this.controls.lInput.value = params.lSide;
         if (params.preset) this.controls.presetSelect.value = params.preset;
         if (params.j) {
-          this.controls.jInput.value = params.j;
-          const val = parseFloat(params.j) / SLIDER_SCALE;
-          const jLabel = this.controls.jInput.parentElement?.querySelector("label");
-          if (jLabel) jLabel.textContent = `Coupling (J): ${val.toFixed(2)}`;
+          let val = parseFloat(params.j);
+          if (val > 20) val /= 100; // Migration from old 0-2000 range
+          this.controls.jInput.value = val.toString();
+          this.controls.jInput.dispatchEvent(new Event("input"));
         }
         if (params.m) {
-          this.controls.mInput.value = params.m;
-          const val = parseFloat(params.m) / SLIDER_SCALE;
-          const mLabel = this.controls.mInput.parentElement?.querySelector("label");
-          if (mLabel) mLabel.textContent = `Field (M): ${val.toFixed(2)}`;
+          let val = parseFloat(params.m);
+          if (val > 10) val /= 100; // Migration from old 0-1000 range
+          this.controls.mInput.value = val.toString();
+          this.controls.mInput.dispatchEvent(new Event("input"));
         }
         if (params.timeScale) {
-          this.controls.timeInput.value = params.timeScale;
-          const val = parseFloat(params.timeScale) / SLIDER_SCALE;
-          const tLabel = this.controls.timeInput.parentElement?.querySelector("label");
-          if (tLabel) tLabel.textContent = `Time Scale: ${val.toFixed(1)}x`;
+          let val = parseFloat(params.timeScale);
+          if (val > 10) val /= 100; // Migration from old 10-500 range
+          this.controls.timeInput.value = val.toString();
+          this.controls.timeInput.dispatchEvent(new Event("input"));
         }
         if (params.temp) {
-          this.controls.tempInput.value = params.temp;
-          const val = parseFloat(params.temp) / SLIDER_SCALE;
-          const tempLabel = this.controls.tempInput.parentElement?.querySelector("label");
-          if (tempLabel) tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
+          let val = parseFloat(params.temp);
+          if (val > 2) val /= 100; // Migration from old 0-200 range
+          this.controls.tempInput.value = val.toString();
+          this.controls.tempInput.dispatchEvent(new Event("input"));
         }
         if (params.showArrows !== undefined) this.controls.arrowCheck.checked = params.showArrows;
         this.controls.updatePresetUI();
