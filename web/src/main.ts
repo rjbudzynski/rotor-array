@@ -310,41 +310,62 @@ class App {
     const newMode = !this.useWebGL2Rendering;
     
     if (newMode) {
-      // Switching TO WebGL2: initialize the renderer (if not already initialized)
-      this.webglCanvas.width = this.canvas.width;
-      this.webglCanvas.height = this.canvas.height;
-      this.webglCanvas.style.width = this.canvas.style.width;
-      this.webglCanvas.style.height = this.canvas.style.height;
+      // Switching TO WebGL2: need to recreate canvas and renderer
       this.canvas.style.display = "none";
-      this.webglCanvas.style.display = "block";
       
-      // Only initialize if not already active
-      if (!this.renderer.isInitialized()) {
-        // Initialize WebGL (may fail on resource-constrained systems)
-        const success = this.renderer.init();
-        if (!success) {
-          console.error("Failed to initialize WebGL2 context");
-          alert("Failed to initialize WebGL2. The browser may be out of GPU memory. Please reload the page and try again.");
-          // Revert the display changes since WebGL failed
-          this.canvas.style.display = "block";
-          this.webglCanvas.style.display = "none";
-          return; // Don't switch modes
+      // Create a fresh canvas element to avoid context issues
+      const newCanvas = document.createElement("canvas");
+      newCanvas.id = "webgl-canvas";
+      newCanvas.className = "sim-layer";
+      newCanvas.width = this.canvas.width;
+      newCanvas.height = this.canvas.height;
+      newCanvas.style.width = this.canvas.style.width;
+      newCanvas.style.height = this.canvas.style.height;
+      newCanvas.style.display = "block";
+      
+      // Append to canvas-stack (sim-canvas and overlay-canvas are already there)
+      const canvasStack = document.getElementById("canvas-stack");
+      if (canvasStack) {
+        // Insert after sim-canvas (before overlay-canvas)
+        const simCanvas = document.getElementById("sim-canvas");
+        if (simCanvas && simCanvas.nextSibling) {
+          canvasStack.insertBefore(newCanvas, simCanvas.nextSibling);
+        } else {
+          canvasStack.appendChild(newCanvas);
         }
+      }
+      
+      // Update references
+      this.webglCanvas = newCanvas;
+      this.renderer = new WebGLRenderer(this.webglCanvas);
+      
+      // Initialize fresh WebGL context
+      const success = this.renderer.init();
+      if (!success) {
+        console.error("Failed to initialize WebGL2 context");
+        alert("Failed to initialize WebGL2. The browser may be out of GPU memory. Please reload the page and try again.");
+        // Revert the display changes since WebGL failed
+        this.canvas.style.display = "block";
+        this.webglCanvas.style.display = "none";
+        return; // Don't switch modes
       }
       
       this.useWebGL2Rendering = true;
       this.setStatus("WebGL2", "#4caf50");
     } else {
-      // Switching TO Canvas2D: destroy WebGL to prevent context loss cycles
+      // Switching TO Canvas2D: destroy WebGL and remove canvas
       this.canvas.style.display = "block";
-      this.webglCanvas.style.display = "none";
       this.useWebGL2Rendering = false;
       this.setStatus("Canvas2D", "#2196f3");
       
-      // Only destroy if currently active
+      // Destroy and remove the WebGL canvas to free GPU resources
       if (this.renderer.isInitialized()) {
-        // Destroy WebGL context completely to free GPU resources
         this.renderer.destroy();
+      }
+      
+      // Remove canvas from DOM to fully release GPU resources
+      if (this.webglCanvas.parentNode) {
+        this.webglCanvas.parentNode.removeChild(this.webglCanvas);
       }
     }
     

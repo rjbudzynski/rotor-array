@@ -99,6 +99,12 @@ export class WebGLRenderer {
     if (!this.webgl) return false;
     const { gl } = this.webgl;
 
+    // Verify context is valid before creating resources
+    if (gl.isContextLost()) {
+      console.error("Cannot initialize resources: WebGL context is lost");
+      return false;
+    }
+
     // Create color LUT texture (precomputed color mapping)
     this.colorLUT = createColorLUTTexture(gl);
     if (!this.colorLUT) {
@@ -241,8 +247,6 @@ export class WebGLRenderer {
     console.log("Destroying WebGL context");
     this.isDestroyed = true;
     
-    const { gl, loseContextExt } = this.webgl;
-    
     // Clean up all resources first
     this.cleanupResources();
     
@@ -252,10 +256,12 @@ export class WebGLRenderer {
       this.cleanupFn = null;
     }
     
-    // Force context loss
-    if (loseContextExt) {
-      loseContextExt.loseContext();
-    }
+    // NOTE: We intentionally do NOT force context loss with loseContext().
+    // Forcing context loss and then trying to reinitialize on the same canvas
+    // can cause shader compilation failures on some browsers (Safari, Chrome on macOS).
+    // Instead, we just mark as destroyed and clear the reference.
+    // The browser will naturally lose the context when the canvas is hidden,
+    // and we'll create a fresh context on a new canvas when switching back.
     
     // Clear references
     this.webgl = null;

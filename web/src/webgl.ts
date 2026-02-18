@@ -23,6 +23,12 @@ function compileShader(
   source: string,
   type: number,
 ): WebGLShader | null {
+  // Check if context is valid before attempting to compile
+  if (gl.isContextLost()) {
+    console.error("Cannot compile shader: WebGL context is lost");
+    return null;
+  }
+
   const shader = gl.createShader(type);
   if (!shader) {
     console.error("Failed to create shader");
@@ -33,7 +39,7 @@ function compileShader(
   gl.compileShader(shader);
 
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const info = gl.getShaderInfoLog(shader);
+    const info = gl.getShaderInfoLog(shader) || "Unknown error";
     console.error(`Shader compilation failed: ${info}`);
     gl.deleteShader(shader);
     return null;
