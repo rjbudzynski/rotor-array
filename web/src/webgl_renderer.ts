@@ -48,6 +48,10 @@ export class WebGLRenderer {
     return this.isDestroyed;
   }
 
+  public isInitialized(): boolean {
+    return this.webgl !== null && !this.isDestroyed;
+  }
+
   public init(): boolean {
     // Reset destroyed flag when initializing
     this.isDestroyed = false;
@@ -72,6 +76,11 @@ export class WebGLRenderer {
         // Skip restoration if we intentionally destroyed the context
         if (this.isDestroyed) {
           console.log("Skipping restoration - context was intentionally destroyed");
+          return;
+        }
+        // Skip if we already have a valid context (was manually re-initialized)
+        if (this.webgl && !this.webgl.gl.isContextLost()) {
+          console.log("Context already restored, skipping auto-restore");
           return;
         }
         this.webglContextLost = false;

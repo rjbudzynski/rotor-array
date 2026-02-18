@@ -310,7 +310,7 @@ class App {
     const newMode = !this.useWebGL2Rendering;
     
     if (newMode) {
-      // Switching TO WebGL2: initialize the renderer
+      // Switching TO WebGL2: initialize the renderer (if not already initialized)
       this.webglCanvas.width = this.canvas.width;
       this.webglCanvas.height = this.canvas.height;
       this.webglCanvas.style.width = this.canvas.style.width;
@@ -318,15 +318,18 @@ class App {
       this.canvas.style.display = "none";
       this.webglCanvas.style.display = "block";
       
-      // Initialize WebGL (may fail on resource-constrained systems)
-      const success = this.renderer.init();
-      if (!success) {
-        console.error("Failed to initialize WebGL2 context");
-        alert("Failed to initialize WebGL2. The browser may be out of GPU memory. Please reload the page and try again.");
-        // Revert the display changes since WebGL failed
-        this.canvas.style.display = "block";
-        this.webglCanvas.style.display = "none";
-        return; // Don't switch modes
+      // Only initialize if not already active
+      if (!this.renderer.isInitialized()) {
+        // Initialize WebGL (may fail on resource-constrained systems)
+        const success = this.renderer.init();
+        if (!success) {
+          console.error("Failed to initialize WebGL2 context");
+          alert("Failed to initialize WebGL2. The browser may be out of GPU memory. Please reload the page and try again.");
+          // Revert the display changes since WebGL failed
+          this.canvas.style.display = "block";
+          this.webglCanvas.style.display = "none";
+          return; // Don't switch modes
+        }
       }
       
       this.useWebGL2Rendering = true;
@@ -338,8 +341,11 @@ class App {
       this.useWebGL2Rendering = false;
       this.setStatus("Canvas2D", "#2196f3");
       
-      // Destroy WebGL context completely to free GPU resources
-      this.renderer.destroy();
+      // Only destroy if currently active
+      if (this.renderer.isInitialized()) {
+        // Destroy WebGL context completely to free GPU resources
+        this.renderer.destroy();
+      }
     }
     
     this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
