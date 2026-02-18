@@ -119,6 +119,8 @@ export class SimulationManager {
     const transfer: Transferable[] = [];
     const payload: { theta?: ArrayBuffer; omega?: ArrayBuffer } = {};
 
+    // Only return buffers that are valid (have content and haven't been detached)
+    // Detached buffers have byteLength === 0 after being transferred
     if (theta && theta.byteLength > 0) {
       payload.theta = theta;
       transfer.push(theta);

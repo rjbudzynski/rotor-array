@@ -202,6 +202,10 @@ class App {
       this.overlayCanvas.height = canvasSize;
       this.webglCanvas.width = canvasSize;
       this.webglCanvas.height = canvasSize;
+      
+      // Canvas resize destroys the 2D context - must recreate it
+      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
     }
 
     if (thetaBuf && omegaBuf) {
