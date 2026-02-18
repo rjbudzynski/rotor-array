@@ -372,19 +372,25 @@ class App {
       this.useWebGL2Rendering = false;
       this.setStatus("Canvas2D", "#2196f3");
       
+      console.log("[Mode Switch] Destroying WebGL renderer...");
       // Destroy and remove the WebGL canvas to free GPU resources
       if (this.renderer.isInitialized()) {
         this.renderer.destroy();
       }
       
+      console.log("[Mode Switch] Removing WebGL canvas from DOM...");
       // Remove canvas from DOM to fully release GPU resources
       if (this.webglCanvas.parentNode) {
         this.webglCanvas.parentNode.removeChild(this.webglCanvas);
       }
       
+      console.log("[Mode Switch] Initializing Canvas2D contexts...");
       // Ensure 2D contexts are initialized for Canvas2D rendering
       this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
       this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+      
+      console.log(`[Mode Switch] Canvas2D context ready: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}`);
+      console.log(`[Mode Switch] Canvas dimensions: ${this.canvas.width}x${this.canvas.height}`);
       
       // Clear the canvas to ensure clean state
       if (this.bitmapCtx) {
