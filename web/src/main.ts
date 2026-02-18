@@ -230,18 +230,27 @@ class App {
         imageBitmap?.close();
       } else if (imageBitmap) {
         try {
-          console.log(`[Canvas2D] Rendering: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap closed=${imageBitmap.width === 0}`);
+          console.log(`[Canvas2D] Rendering: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap width=${imageBitmap.width}, height=${imageBitmap.height}`);
           if (this.bitmapCtx) {
+            console.log("[Canvas2D] Calling transferFromImageBitmap...");
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
+            console.log("[Canvas2D] transferFromImageBitmap succeeded");
           } else if (this.ctx2d) {
+            console.log("[Canvas2D] Calling drawImage...");
             this.ctx2d.drawImage(imageBitmap, 0, 0);
+            console.log("[Canvas2D] drawImage succeeded");
           } else {
             console.error("[Canvas2D] No rendering context available!");
           }
         } catch (e) {
-          console.error("Error in Canvas2D render:", e);
+          console.error("[Canvas2D] Error in render:", e);
+          console.error("[Canvas2D] Error stack:", (e as Error).stack);
         }
-        imageBitmap.close();
+        try {
+          imageBitmap.close();
+        } catch (e) {
+          console.error("[Canvas2D] Error closing imageBitmap:", e);
+        }
       } else {
         console.log("[Canvas2D] No imageBitmap to render");
       }
