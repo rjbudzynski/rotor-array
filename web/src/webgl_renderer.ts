@@ -67,20 +67,25 @@ export class WebGLRenderer {
     this.cleanupFn = setupContextHandlers(
       this.canvas,
       (e) => {
-        console.warn("WebGL context lost");
+        // Suppress all events if destroyed - prevents late events from causing issues
+        if (this.isDestroyed) {
+          console.log("[WebGL] Ignoring context lost event - renderer is destroyed");
+          return;
+        }
+        console.warn("[WebGL] Context lost");
         this.webglContextLost = true;
         e.preventDefault(); // Allow restoration
       },
       () => {
-        console.log("WebGL context restored");
-        // Skip restoration if we intentionally destroyed the context
+        // Suppress all events if destroyed
         if (this.isDestroyed) {
-          console.log("Skipping restoration - context was intentionally destroyed");
+          console.log("[WebGL] Ignoring context restored event - renderer is destroyed");
           return;
         }
+        console.log("[WebGL] Context restored");
         // Skip if we already have a valid context (was manually re-initialized)
         if (this.webgl && !this.webgl.gl.isContextLost()) {
-          console.log("Context already restored, skipping auto-restore");
+          console.log("[WebGL] Context already restored, skipping auto-restore");
           return;
         }
         this.webglContextLost = false;
