@@ -129,6 +129,9 @@ self.onmessage = async (e) => {
     case "setRenderMode":
       if (payload.mode === "webgl2" || payload.mode === "canvas2d") {
         renderMode = payload.mode;
+        // Reset buffers to prevent issues with transferred but not-yet-returned buffers
+        thetaBuffer = null;
+        omegaBuffer = null;
       }
       break;
 
