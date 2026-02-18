@@ -230,15 +230,20 @@ class App {
         imageBitmap?.close();
       } else if (imageBitmap) {
         try {
+          console.log(`[Canvas2D] Rendering: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap closed=${imageBitmap.width === 0}`);
           if (this.bitmapCtx) {
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
           } else if (this.ctx2d) {
             this.ctx2d.drawImage(imageBitmap, 0, 0);
+          } else {
+            console.error("[Canvas2D] No rendering context available!");
           }
         } catch (e) {
           console.error("Error in Canvas2D render:", e);
         }
         imageBitmap.close();
+      } else {
+        console.log("[Canvas2D] No imageBitmap to render");
       }
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);

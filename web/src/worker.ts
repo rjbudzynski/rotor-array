@@ -194,10 +194,13 @@ async function renderFrame() {
       canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
       const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
+      console.log(`[Worker] Creating ImageBitmap: ${canvasSize}x${canvasSize}, rgbaSize=${rgbaSize}`);
+
       // Create ImageBitmap for efficient transfer to main thread
       try {
         // Direct creation from ImageData is usually well-optimized
         imageBitmap = await createImageBitmap(imageData);
+        console.log(`[Worker] ImageBitmap created successfully: ${imageBitmap.width}x${imageBitmap.height}`);
       } catch (err) {
         console.error("Failed to create ImageBitmap from ImageData:", err);
         // Fallback: try using OffscreenCanvas if available
@@ -316,6 +319,8 @@ async function renderFrame() {
       payload.omega = omegaBuffer.buffer as ArrayBuffer;
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
     }
+
+    console.log(`[Worker] Sending frame: mode=${renderMode}, imageBitmap=${!!imageBitmap}, transferCount=${transfer.length}`);
 
     self.postMessage({
       type: "frame",
