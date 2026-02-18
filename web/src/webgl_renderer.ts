@@ -35,6 +35,8 @@ export class WebGLRenderer {
   private rotorTextures: RotorStateTextures | null = null;
   private colorLUT: ColorLUTTexture | null = null;
   private webglContextLost = false;
+  private isDestroyed = false; // Tracks if context was intentionally destroyed
+  private cleanupFn: (() => void) | null = null; // Event listener cleanup
 
   public useDebugShader = false;
 
@@ -42,7 +44,15 @@ export class WebGLRenderer {
     this.canvas = canvas;
   }
 
+  public isContextDestroyed(): boolean {
+    return this.isDestroyed;
+  }
+
   public init(): boolean {
+    // Reset destroyed flag when initializing
+    this.isDestroyed = false;
+    this.webglContextLost = false;
+
     this.webgl = initWebGL2(this.canvas);
     if (!this.webgl) {
       console.warn("Failed to initialize WebGL2 context");
@@ -50,7 +60,7 @@ export class WebGLRenderer {
     }
 
     // Setup context lost/restored handlers
-    setupContextHandlers(
+    this.cleanupFn = setupContextHandlers(
       this.canvas,
       (e) => {
         console.warn("WebGL context lost");
@@ -59,6 +69,11 @@ export class WebGLRenderer {
       },
       () => {
         console.log("WebGL context restored");
+        // Skip restoration if we intentionally destroyed the context
+        if (this.isDestroyed) {
+          console.log("Skipping restoration - context was intentionally destroyed");
+          return;
+        }
         this.webglContextLost = false;
         // Re-initialize the WebGL context and resources
         // Note: context is automatically restored, we just need to re-create resources
@@ -205,6 +220,37 @@ export class WebGLRenderer {
       gl.deleteTexture(this.colorLUT.texture);
       this.colorLUT = null;
     }
+  }
+
+  /**
+   * Destroy the WebGL context completely. Call when switching to Canvas2D mode.
+   * This prevents the context restoration cycle on platforms with limited GPU resources.
+   */
+  public destroy(): void {
+    if (!this.webgl) return;
+    
+    console.log("Destroying WebGL context");
+    this.isDestroyed = true;
+    
+    const { gl, loseContextExt } = this.webgl;
+    
+    // Clean up all resources first
+    this.cleanupResources();
+    
+    // Remove event listeners to prevent restoration callbacks
+    if (this.cleanupFn) {
+      this.cleanupFn();
+      this.cleanupFn = null;
+    }
+    
+    // Force context loss
+    if (loseContextExt) {
+      loseContextExt.loseContext();
+    }
+    
+    // Clear references
+    this.webgl = null;
+    this.webglContextLost = false;
   }
 
   public updateTextures(lSide: number, theta: Float32Array, omega: Float32Array): boolean {
