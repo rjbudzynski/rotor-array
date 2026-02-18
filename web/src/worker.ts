@@ -322,11 +322,9 @@ async function renderFrame() {
       payload,
     }, transfer);
 
-    // Buffers are now transferred and unusable
-    if (showArrows) {
-      thetaBuffer = null;
-      omegaBuffer = null;
-    }
+    // Buffers are now transferred and unusable - always clear them
+    thetaBuffer = null;
+    omegaBuffer = null;
 
     lastEmit = performance.now();
   } finally {

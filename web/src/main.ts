@@ -189,55 +189,86 @@ class App {
   }
 
   private handleFrame(payload: FramePayload) {
-    const {
-      imageBitmap, theta: thetaBuf, omega: omegaBuf,
-      orderParameter, lSide, canvasSize, upsample,
-    } = payload;
+    try {
+      const {
+        imageBitmap, theta: thetaBuf, omega: omegaBuf,
+        orderParameter, lSide, canvasSize, upsample,
+      } = payload;
 
-    // Resize canvases if needed
-    if (this.canvas.width !== canvasSize || this.canvas.height !== canvasSize) {
-      this.canvas.width = canvasSize;
-      this.canvas.height = canvasSize;
-      this.overlayCanvas.width = canvasSize;
-      this.overlayCanvas.height = canvasSize;
-      this.webglCanvas.width = canvasSize;
-      this.webglCanvas.height = canvasSize;
-      
-      // Canvas resize destroys the 2D context - must recreate it
-      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-    }
-
-    if (thetaBuf && omegaBuf) {
-      this.renderer.updateTextures(lSide, new Float32Array(thetaBuf), new Float32Array(omegaBuf));
-    }
-
-    if (this.useWebGL2Rendering) {
-      this.renderer.render(lSide, upsample, this.controls.arrowCheck.checked);
-      imageBitmap?.close();
-    } else if (imageBitmap) {
-      if (this.bitmapCtx) {
-        this.bitmapCtx.transferFromImageBitmap(imageBitmap);
-      } else if (this.ctx2d) {
-        this.ctx2d.drawImage(imageBitmap, 0, 0);
+      // Resize canvases if needed
+      if (this.canvas.width !== canvasSize || this.canvas.height !== canvasSize) {
+        this.canvas.width = canvasSize;
+        this.canvas.height = canvasSize;
+        this.overlayCanvas.width = canvasSize;
+        this.overlayCanvas.height = canvasSize;
+        this.webglCanvas.width = canvasSize;
+        this.webglCanvas.height = canvasSize;
+        
+        // Canvas resize destroys the 2D context - must recreate it
+        this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+        this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
       }
-      imageBitmap.close();
-    }
 
-    this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+      // Only update WebGL textures in WebGL mode and with valid buffers
+      if (this.useWebGL2Rendering && thetaBuf && omegaBuf) {
+        try {
+          // Check if buffers are detached (byteLength === 0 after transfer)
+          if (thetaBuf.byteLength > 0 && omegaBuf.byteLength > 0) {
+            this.renderer.updateTextures(lSide, new Float32Array(thetaBuf), new Float32Array(omegaBuf));
+          }
+        } catch (e) {
+          console.error("Error updating WebGL textures:", e);
+        }
+      }
 
-    if (!this.useWebGL2Rendering && this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 && lSide <= 60) {
-      this.drawArrows(this.overlayCtx, new Float32Array(thetaBuf), lSide, upsample);
-    }
+      if (this.useWebGL2Rendering) {
+        try {
+          this.renderer.render(lSide, upsample, this.controls.arrowCheck.checked);
+        } catch (e) {
+          console.error("Error in WebGL render:", e);
+        }
+        imageBitmap?.close();
+      } else if (imageBitmap) {
+        try {
+          if (this.bitmapCtx) {
+            this.bitmapCtx.transferFromImageBitmap(imageBitmap);
+          } else if (this.ctx2d) {
+            this.ctx2d.drawImage(imageBitmap, 0, 0);
+          }
+        } catch (e) {
+          console.error("Error in Canvas2D render:", e);
+        }
+        imageBitmap.close();
+      }
 
-    // Return buffers to worker for recycling after all rendering is done
-    this.simManager.returnBuffers(thetaBuf, omegaBuf);
+      this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
-    const now = performance.now();
-    if (now - this.lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
-      this.plot.push(orderParameter.t, orderParameter.r);
-      this.mdViz.update(orderParameter.r, orderParameter.meanCos, orderParameter.meanSin);
-      this.lastUiUpdate = now;
+      if (!this.useWebGL2Rendering && this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 && lSide <= 60) {
+        try {
+          // Check buffer is valid before creating Float32Array
+          if (thetaBuf.byteLength > 0) {
+            this.drawArrows(this.overlayCtx, new Float32Array(thetaBuf), lSide, upsample);
+          }
+        } catch (e) {
+          console.error("Error drawing arrows:", e);
+        }
+      }
+
+      // Return buffers to worker for recycling after all rendering is done
+      this.simManager.returnBuffers(thetaBuf, omegaBuf);
+
+      const now = performance.now();
+      if (now - this.lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
+        try {
+          this.plot.push(orderParameter.t, orderParameter.r);
+          this.mdViz.update(orderParameter.r, orderParameter.meanCos, orderParameter.meanSin);
+        } catch (e) {
+          console.error("Error updating UI:", e);
+        }
+        this.lastUiUpdate = now;
+      }
+    } catch (e) {
+      console.error("Critical error in handleFrame:", e);
     }
   }
 
