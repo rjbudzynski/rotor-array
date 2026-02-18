@@ -60,7 +60,8 @@ export class WebGLRenderer {
       () => {
         console.log("WebGL context restored");
         this.webglContextLost = false;
-        // Only re-initialize if canvas is visible (not switched to Canvas2D mode)
+        // Re-initialize the WebGL context and resources
+        // Note: context is automatically restored, we just need to re-create resources
         if (this.canvas.style.display !== "none") {
           this.initResources();
         }
@@ -149,10 +150,60 @@ export class WebGLRenderer {
    * Call this when switching back to WebGL rendering mode.
    */
   public restoreContextIfNeeded(): void {
-    if (this.webglContextLost && this.webgl) {
+    if (!this.webgl) return;
+    
+    const { gl } = this.webgl;
+    
+    // Check if context was lost (either flagged or actually lost)
+    if (this.webglContextLost || gl.isContextLost()) {
       console.log("Restoring WebGL context after mode switch");
       this.webglContextLost = false;
+      
+      // Force a full re-initialization by clearing resources first
+      this.cleanupResources();
       this.initResources();
+    }
+  }
+  
+  /**
+   * Clean up all WebGL resources. Call before re-initializing.
+   */
+  private cleanupResources(): void {
+    if (!this.webgl) return;
+    const { gl } = this.webgl;
+    
+    // Delete shader programs
+    if (this.rotorProgram) {
+      gl.deleteProgram(this.rotorProgram.program);
+      this.rotorProgram = null;
+    }
+    if (this.debugProgram) {
+      gl.deleteProgram(this.debugProgram.program);
+      this.debugProgram = null;
+    }
+    if (this.arrowProgram) {
+      gl.deleteProgram(this.arrowProgram.program);
+      this.arrowProgram = null;
+    }
+    
+    // Delete VAOs
+    if (this.fullScreenQuad) {
+      gl.deleteVertexArray(this.fullScreenQuad.vao);
+      this.fullScreenQuad = null;
+    }
+    if (this.arrowGeometry) {
+      gl.deleteVertexArray(this.arrowGeometry.vao);
+      this.arrowGeometry = null;
+    }
+    
+    // Delete textures
+    if (this.rotorTextures) {
+      deleteRotorStateTextures(gl, this.rotorTextures);
+      this.rotorTextures = null;
+    }
+    if (this.colorLUT) {
+      gl.deleteTexture(this.colorLUT.texture);
+      this.colorLUT = null;
     }
   }
 
@@ -185,6 +236,13 @@ export class WebGLRenderer {
     }
 
     const { gl } = this.webgl;
+    
+    // Double-check context is still valid (it might have been lost since last frame)
+    if (gl.isContextLost()) {
+      console.warn("WebGL context is lost, skipping render");
+      this.webglContextLost = true;
+      return;
+    }
 
     // Resize if needed
     const { width, height } = resizeCanvasToDisplaySize(this.canvas);
