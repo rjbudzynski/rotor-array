@@ -312,15 +312,16 @@ async function renderFrame() {
     const transfer: Transferable[] = [];
     if (imageBitmap) {
       transfer.push(imageBitmap);
+      console.log(`[Worker] Added imageBitmap to transfer list`);
     }
     if ((transferRawArrays || showArrows) && thetaBuffer && omegaBuffer) {
-
       payload.theta = thetaBuffer.buffer as ArrayBuffer;
       payload.omega = omegaBuffer.buffer as ArrayBuffer;
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
+      console.log(`[Worker] Added theta/omega buffers to transfer list`);
     }
 
-    console.log(`[Worker] Sending frame: mode=${renderMode}, imageBitmap=${!!imageBitmap}, transferCount=${transfer.length}`);
+    console.log(`[Worker] Sending frame: mode=${renderMode}, imageBitmap=${!!imageBitmap}, imageBitmapDims=${imageBitmap ? `${imageBitmap.width}x${imageBitmap.height}` : 'none'}, transferCount=${transfer.length}`);
 
     self.postMessage({
       type: "frame",
