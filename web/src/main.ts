@@ -367,6 +367,17 @@ class App {
       if (this.webglCanvas.parentNode) {
         this.webglCanvas.parentNode.removeChild(this.webglCanvas);
       }
+      
+      // Ensure 2D contexts are initialized for Canvas2D rendering
+      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+      
+      // Clear the canvas to ensure clean state
+      if (this.bitmapCtx) {
+        // Bitmap context doesn't need clearing, but ensure canvas is ready
+      } else if (this.ctx2d) {
+        this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
     }
     
     this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
