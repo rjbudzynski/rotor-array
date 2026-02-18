@@ -60,8 +60,10 @@ export class WebGLRenderer {
       () => {
         console.log("WebGL context restored");
         this.webglContextLost = false;
-        // Re-initialize resources
-        this.initResources();
+        // Only re-initialize if canvas is visible (not switched to Canvas2D mode)
+        if (this.canvas.style.display !== "none") {
+          this.initResources();
+        }
       },
     );
 
@@ -140,6 +142,18 @@ export class WebGLRenderer {
 
     console.log("WebGL2 renderer initialized successfully");
     return true;
+  }
+
+  /**
+   * Restore WebGL context if it was lost while the canvas was hidden.
+   * Call this when switching back to WebGL rendering mode.
+   */
+  public restoreContextIfNeeded(): void {
+    if (this.webglContextLost && this.webgl) {
+      console.log("Restoring WebGL context after mode switch");
+      this.webglContextLost = false;
+      this.initResources();
+    }
   }
 
   public updateTextures(lSide: number, theta: Float32Array, omega: Float32Array): boolean {

@@ -281,6 +281,8 @@ class App {
       this.canvas.style.display = "none";
       this.webglCanvas.style.display = "block";
       this.setStatus("WebGL2", "#4caf50");
+      // Ensure WebGL context is ready (may have been lost while in Canvas2D mode)
+      this.renderer.restoreContextIfNeeded();
     } else {
       this.canvas.style.display = "block";
       this.webglCanvas.style.display = "none";
