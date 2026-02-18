@@ -1,6 +1,8 @@
 import {
+  bindColorLUTTexture,
   bindRotorStateTextures,
   createArrowGeometry,
+  createColorLUTTexture,
   createFullScreenQuad,
   createRotorStateTextures,
   createShaderProgram,
@@ -9,6 +11,7 @@ import {
   resizeCanvasToDisplaySize,
   setupContextHandlers,
   updateRotorStateTextures,
+  type ColorLUTTexture,
   type RotorStateTextures,
   type ShaderProgram,
   type WebGLContext,
@@ -30,8 +33,9 @@ export class WebGLRenderer {
   private fullScreenQuad: { vao: WebGLVertexArrayObject; vertexCount: number } | null = null;
   private arrowGeometry: { vao: WebGLVertexArrayObject; vertexCount: number } | null = null;
   private rotorTextures: RotorStateTextures | null = null;
+  private colorLUT: ColorLUTTexture | null = null;
   private webglContextLost = false;
-  
+
   public useDebugShader = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -68,13 +72,19 @@ export class WebGLRenderer {
     if (!this.webgl) return false;
     const { gl } = this.webgl;
 
+    // Create color LUT texture (precomputed color mapping)
+    this.colorLUT = createColorLUTTexture(gl);
+    if (!this.colorLUT) {
+      console.warn("Failed to create color LUT texture");
+    }
+
     // Create rotor rendering shader program
     this.rotorProgram = createShaderProgram(
       gl,
       fullScreenQuadVertexShader,
       rotorFragmentShader,
       ["a_position"],
-      ["u_thetaTexture", "u_omegaTexture", "u_latticeSize", "u_upsample"],
+      ["u_thetaTexture", "u_omegaTexture", "u_colorLut", "u_latticeSize", "u_upsample"],
     );
 
     if (!this.rotorProgram) {
@@ -181,10 +191,16 @@ export class WebGLRenderer {
     // Use shader
     gl.useProgram(program.program);
 
-    // Bind textures
+    // Bind rotor state textures (units 0 and 1)
     const thetaLoc = program.uniformLocations.get("u_thetaTexture");
     const omegaLoc = program.uniformLocations.get("u_omegaTexture");
     bindRotorStateTextures(gl, this.rotorTextures, thetaLoc ?? null, omegaLoc ?? null, 0, 1);
+
+    // Bind color LUT texture (unit 2)
+    if (this.colorLUT) {
+      const lutLoc = program.uniformLocations.get("u_colorLut");
+      bindColorLUTTexture(gl, this.colorLUT, lutLoc ?? null, 2);
+    }
 
     // Set uniforms
     const latticeSizeLoc = program.uniformLocations.get("u_latticeSize");

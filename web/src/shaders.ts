@@ -70,7 +70,7 @@ void main() {
 /**
  * Fragment shader for rotor visualization
  * Renders anti-aliased disks with color based on angle (hue) and energy (value)
- * Uses SDF (Signed Distance Field) for smooth edges
+ * Uses color LUT texture for efficient lookup instead of per-pixel calculation
  */
 export const rotorFragmentShader = `#version 300 es
 
@@ -80,17 +80,14 @@ in vec2 v_uv;
 
 uniform sampler2D u_thetaTexture;
 uniform sampler2D u_omegaTexture;
+uniform sampler2D u_colorLut; // 360x64 RGB lookup table
 uniform vec2 u_latticeSize; // L x L
 uniform float u_upsample;   // Pixels per rotor
 
 out vec4 fragColor;
 
-// HSV to RGB conversion
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
+const float PI = 3.14159265359;
+const float TWO_PI = 6.28318530718;
 
 void main() {
     // Calculate which rotor cell we're in
@@ -122,20 +119,25 @@ void main() {
         alpha = 1.0 - smoothstep(diskRadius - halfEdge, diskRadius + halfEdge, dist);
     }
     
-    // Map theta to hue: theta in [-PI, PI] -> hue in [0, 1]
-    // Uses HUE_OFFSET = 0.666 to match colors.ts/colors.rs
-    float hue = (theta / (2.0 * 3.14159265359)) + 0.666;
-    hue = fract(hue); // Wrap to [0, 1]
+    // Map theta to angle index [0, 359] for LUT lookup
+    // The LUT is indexed by angle (0-359), where each entry stores the color
+    // for that angle's theta value. So we directly map theta to an angle index.
+    // Normalize theta from [-PI, PI] to [0, 360)
+    float thetaNorm = theta;
+    if (thetaNorm < 0.0) {
+        thetaNorm += TWO_PI;
+    }
+    int angleIdx = int((thetaNorm / TWO_PI) * 360.0);
+    angleIdx = angleIdx % 360;
     
-    // Map omega^2 to value (brightness)
-    // omega^2 represents kinetic energy
+    // Map omega^2 to LUT y-coordinate (energy index [0, 63])
     float energy = omega * omega;
-    // Map energy to value with tanh curve to match colors.ts/colors.rs
-    // val_min = 0.4, val_max = 0.8
-    float value = 0.4 + (0.8 - 0.4) * tanh(energy / 5.0);
+    int energyIdx = int((energy / 10.0) * 64.0);
+    energyIdx = clamp(energyIdx, 0, 63);
     
-    // Convert HSV to RGB
-    vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+    // Sample color from LUT texture using texelFetch (exact, no interpolation)
+    // Texture is 64x360 with (energy, angle) coordinates to match Rust layout
+    vec3 rgb = texelFetch(u_colorLut, ivec2(energyIdx, angleIdx), 0).rgb;
     
     // Output with alpha
     fragColor = vec4(rgb, alpha);

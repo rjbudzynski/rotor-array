@@ -514,3 +514,116 @@ export function deleteRotorStateTextures(
   gl.deleteTexture(textures.thetaTexture);
   gl.deleteTexture(textures.omegaTexture);
 }
+
+// ============================================================================
+// COLOR LOOKUP TABLE (LUT) TEXTURE
+// ============================================================================
+
+export interface ColorLUTTexture {
+  texture: WebGLTexture;
+  width: number;
+  height: number;
+}
+
+/**
+ * Create a color lookup table texture for efficient rotor coloring.
+ * The LUT maps (theta, omega²) to RGB colors, precomputing hsv2rgb and tanh.
+ * 
+ * X-axis: 360 angle bins (theta → hue)
+ * Y-axis: 64 energy bins (omega² → value via tanh curve)
+ */
+export function createColorLUTTexture(
+  gl: WebGL2RenderingContext,
+): ColorLUTTexture | null {
+  const ANG_STEPS = 360;
+  const ENG_STEPS = 64;
+  
+  const texture = gl.createTexture();
+  if (!texture) {
+    console.error("Failed to create color LUT texture");
+    return null;
+  }
+
+  // Generate LUT data on CPU (matches colors.rs logic exactly)
+  // Rust stores colors as: for each angle, for each energy: color
+  // This means angle varies slowest, energy varies fastest
+  // To match with texelFetch(angleIdx, energyIdx), we need texture width=64, height=360
+  const lutData = new Uint8Array(ANG_STEPS * ENG_STEPS * 3);
+  
+  for (let a = 0; a < ANG_STEPS; a++) {
+    const theta = (a / ANG_STEPS) * 2.0 * Math.PI;
+    // theta_to_hue: hue = (theta / 2π + 0.666) % 1.0
+    let hue = (theta / (2.0 * Math.PI) + 0.666) % 1.0;
+    if (hue < 0) hue += 1.0;
+    
+    for (let e = 0; e < ENG_STEPS; e++) {
+      // omega_to_value: val = 0.4 + 0.4 * tanh(energy / 5.0)
+      const energy = (e / (ENG_STEPS - 1)) * 10.0;
+      const val = 0.4 + 0.4 * Math.tanh(energy / 5.0);
+      
+      // hsv_to_rgb
+      const h = hue * 6.0;
+      const i = Math.floor(h);
+      const f = h - i;
+      const p = 0.0; // val * (1.0 - 1.0), s = 1.0 so (1-s) = 0
+      const q = val * (1.0 - f);
+      const t = val * f;
+      
+      let r = 0, g = 0, b = 0;
+      switch (i % 6) {
+        case 0: r = val; g = t; b = p; break;
+        case 1: r = q; g = val; b = p; break;
+        case 2: r = p; g = val; b = t; break;
+        case 3: r = p; g = q; b = val; break;
+        case 4: r = t; g = p; b = val; break;
+        case 5: r = val; g = p; b = q; break;
+      }
+      
+      // Match Rust's memory layout: offset = (a * ENG_STEPS + e) * 3
+      // In texture terms: row = a (angle), column = e (energy)
+      // So texture is 64 wide (energy), 360 tall (angle)
+      const offset = (a * ENG_STEPS + e) * 3;
+      lutData[offset] = Math.round(r * 255);
+      lutData[offset + 1] = Math.round(g * 255);
+      lutData[offset + 2] = Math.round(b * 255);
+    }
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  // Texture dimensions: width=ENG_STEPS (64), height=ANG_STEPS (360)
+  // This matches Rust's memory layout where angle varies slowest
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGB8,
+    ENG_STEPS,  // width = 64 (energy)
+    ANG_STEPS,  // height = 360 (angle)
+    0,
+    gl.RGB,
+    gl.UNSIGNED_BYTE,
+    lutData,
+  );
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  return { texture, width: ANG_STEPS, height: ENG_STEPS };
+}
+
+/**
+ * Bind color LUT texture to shader program
+ */
+export function bindColorLUTTexture(
+  gl: WebGL2RenderingContext,
+  lut: ColorLUTTexture,
+  uniformLocation: WebGLUniformLocation | null,
+  textureUnit: number,
+): void {
+  gl.activeTexture(gl.TEXTURE0 + textureUnit);
+  gl.bindTexture(gl.TEXTURE_2D, lut.texture);
+  if (uniformLocation !== null) {
+    gl.uniform1i(uniformLocation, textureUnit);
+  }
+}
