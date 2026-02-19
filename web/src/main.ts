@@ -10,20 +10,16 @@ import {
   DEFAULT_LATTICE_SIZE,
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
-import { WebGLRenderer } from "./webgl_renderer.ts";
 import { FramePayload, SimulationManager } from "./simulation_manager.ts";
 
 const STORAGE_KEY = "rotorArrayParams";
 
 class App {
   private canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
-  private webglCanvas = document.getElementById("webgl-canvas") as HTMLCanvasElement;
   private overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
   private mdCanvas = document.getElementById("mean-dir-canvas") as HTMLCanvasElement;
   
-  private renderer: WebGLRenderer;
   private simManager: SimulationManager;
-  private useWebGL2Rendering = false;
   
   private mdViz: MeanDirectionVisualizer;
   private plot: OrderPlot;
@@ -35,13 +31,12 @@ class App {
   
   private energyPerNodeEl = document.getElementById("energy-per-node-value");
   private energyRelDevEl = document.getElementById("energy-rel-dev-value");
-  private webglStatusEl: HTMLElement;
+  private statusEl: HTMLElement;
   
   private lastUiUpdate = 0;
   private displaySize = 0;
 
   constructor() {
-    this.renderer = new WebGLRenderer(this.webglCanvas);
     this.simManager = new SimulationManager();
     
     this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
@@ -56,7 +51,7 @@ class App {
     this.controls = new ControlPanel("controls-container");
     new ColorBarVisualizer("color-bar-container");
     
-    this.webglStatusEl = this.createStatusIndicator();
+    this.statusEl = this.createStatusIndicator();
     
     this.setupListeners();
     this.setupResizeObserver();
@@ -92,46 +87,26 @@ class App {
 
   private createStatusIndicator(): HTMLElement {
     const el = document.createElement("div");
-    el.id = "webgl-status";
+    el.id = "sim-status";
     el.style.cssText =
-      "position:fixed;top:10px;left:10px;padding:8px 12px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:all 0.3s;cursor:pointer;";
-    el.title = "Click to toggle WebGL2 rendering";
+      "position:fixed;top:10px;left:10px;padding:8px 12px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:all 0.3s;";
     document.body.appendChild(el);
-    
-    el.addEventListener("click", () => this.toggleRenderMode());
-    
     return el;
   }
 
   private setStatus(msg: string, color: string) {
-    this.webglStatusEl.textContent = msg;
-    this.webglStatusEl.style.background = color;
-    this.webglStatusEl.style.color = color === "#ffeb3b" ? "#000" : "#fff";
+    this.statusEl.textContent = msg;
+    this.statusEl.style.background = color;
+    this.statusEl.style.color = color === "#ffeb3b" ? "#000" : "#fff";
     console.log(`[RotorArray] Status: ${msg}`);
   }
 
   private init() {
     this.setStatus("initializing...", "#2196f3");
-    
-    try {
-      if (this.renderer.init()) {
-        this.useWebGL2Rendering = true;
-        this.canvas.style.display = "none";
-        this.webglCanvas.style.display = "block";
-        this.setStatus("WebGL2", "#4caf50");
-      } else {
-        this.setStatus("Canvas2D", "#ff9800");
-      }
-    } catch (err) {
-      console.error("[RotorArray] WebGL2 initialization failed:", err);
-      this.setStatus(
-        `error: ${err instanceof Error ? err.message : String(err)}`,
-        "#f44336",
-      );
-    }
+    this.setStatus("ready", "#4caf50");
 
     setTimeout(() => {
-      this.webglStatusEl.style.opacity = "0.5";
+      this.statusEl.style.opacity = "0.5";
     }, 5000);
 
     this.loadParameters();
@@ -144,7 +119,7 @@ class App {
 
   private setupListeners() {
     this.simManager.onInitialized(() => {
-      this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
+      this.simManager.setRenderMode("canvas2d");
     });
 
     this.simManager.onFrame((payload) => this.handleFrame(payload));
@@ -201,34 +176,14 @@ class App {
         this.canvas.height = canvasSize;
         this.overlayCanvas.width = canvasSize;
         this.overlayCanvas.height = canvasSize;
-        this.webglCanvas.width = canvasSize;
-        this.webglCanvas.height = canvasSize;
         
         // Canvas resize destroys the 2D context - must recreate it
         this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
         this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
       }
 
-      // Only update WebGL textures in WebGL mode and with valid buffers
-      if (this.useWebGL2Rendering && thetaBuf && omegaBuf) {
-        try {
-          // Check if buffers are detached (byteLength === 0 after transfer)
-          if (thetaBuf.byteLength > 0 && omegaBuf.byteLength > 0) {
-            this.renderer.updateTextures(lSide, new Float32Array(thetaBuf), new Float32Array(omegaBuf));
-          }
-        } catch (e) {
-          console.error("Error updating WebGL textures:", e);
-        }
-      }
-
-      if (this.useWebGL2Rendering) {
-        try {
-          this.renderer.render(lSide, upsample, this.controls.arrowCheck.checked);
-        } catch (e) {
-          console.error("Error in WebGL render:", e);
-        }
-        imageBitmap?.close();
-      } else if (imageBitmap) {
+      // Draw ImageBitmap from WASM visualization
+      if (imageBitmap) {
         try {
           if (this.bitmapCtx) {
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
@@ -243,7 +198,8 @@ class App {
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
-      if (!this.useWebGL2Rendering && this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 && lSide <= 60) {
+      // Draw arrows if enabled and disks are large enough
+      if (this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 && lSide <= 60) {
         try {
           // Check buffer is valid before creating Float32Array
           if (thetaBuf.byteLength > 0) {
@@ -306,83 +262,7 @@ class App {
     this.controls.toggleInputs(true);
   }
 
-  private toggleRenderMode() {
-    const newMode = !this.useWebGL2Rendering;
-    
-    if (newMode) {
-      // Switching TO WebGL2: need to recreate canvas and renderer
-      this.canvas.style.display = "none";
-      
-      // Create a fresh canvas element to avoid context issues
-      const newCanvas = document.createElement("canvas");
-      newCanvas.id = "webgl-canvas";
-      newCanvas.className = "sim-layer";
-      newCanvas.width = this.canvas.width;
-      newCanvas.height = this.canvas.height;
-      newCanvas.style.width = this.canvas.style.width;
-      newCanvas.style.height = this.canvas.style.height;
-      newCanvas.style.display = "block";
-      
-      // Append to canvas-stack (sim-canvas and overlay-canvas are already there)
-      const canvasStack = document.getElementById("canvas-stack");
-      if (canvasStack) {
-        // Insert after sim-canvas (before overlay-canvas)
-        const simCanvas = document.getElementById("sim-canvas");
-        if (simCanvas && simCanvas.nextSibling) {
-          canvasStack.insertBefore(newCanvas, simCanvas.nextSibling);
-        } else {
-          canvasStack.appendChild(newCanvas);
-        }
-      }
-      
-      // Update references
-      this.webglCanvas = newCanvas;
-      this.renderer = new WebGLRenderer(this.webglCanvas);
-      
-      // Initialize fresh WebGL context
-      const success = this.renderer.init();
-      if (!success) {
-        console.error("Failed to initialize WebGL2 context");
-        alert("Failed to initialize WebGL2. The browser may be out of GPU memory. Please reload the page and try again.");
-        // Revert the display changes since WebGL failed
-        this.canvas.style.display = "block";
-        this.webglCanvas.style.display = "none";
-        return; // Don't switch modes
-      }
-      
-      this.useWebGL2Rendering = true;
-      this.setStatus("WebGL2", "#4caf50");
-    } else {
-      // Switching TO Canvas2D: destroy WebGL and remove canvas
-      this.canvas.style.display = "block";
-      this.useWebGL2Rendering = false;
-      this.setStatus("Canvas2D", "#2196f3");
-      
-      // Destroy and remove the WebGL canvas to free GPU resources
-      if (this.renderer.isInitialized()) {
-        this.renderer.destroy();
-      }
-      
-      // Remove canvas from DOM to fully release GPU resources
-      if (this.webglCanvas.parentNode) {
-        this.webglCanvas.parentNode.removeChild(this.webglCanvas);
-      }
-      
-      // Use bitmaprenderer if available (macOS), fallback to 2D (Linux)
-      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-      
-      // Clear the canvas to ensure clean state
-      if (this.bitmapCtx) {
-        // Bitmap context doesn't need clearing
-      } else if (this.ctx2d) {
-        this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      }
-    }
-    
-    this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
-    this.simManager.requestFrame();
-  }
+
 
   private drawArrows(ctx: CanvasRenderingContext2D, theta: Float32Array, lSide: number, upsample: number) {
     const L = lSide;
