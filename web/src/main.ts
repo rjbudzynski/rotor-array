@@ -31,7 +31,6 @@ class App {
   
   private energyPerNodeEl = document.getElementById("energy-per-node-value");
   private energyRelDevEl = document.getElementById("energy-rel-dev-value");
-  private statusEl: HTMLElement;
   
   private lastUiUpdate = 0;
   private displaySize = 0;
@@ -50,8 +49,6 @@ class App {
     this.plot = new OrderPlot("uplot-chart");
     this.controls = new ControlPanel("controls-container");
     new ColorBarVisualizer("color-bar-container");
-    
-    this.statusEl = this.createStatusIndicator();
     
     this.setupListeners();
     this.setupResizeObserver();
@@ -85,30 +82,7 @@ class App {
     observer.observe(container);
   }
 
-  private createStatusIndicator(): HTMLElement {
-    const el = document.createElement("div");
-    el.id = "sim-status";
-    el.style.cssText =
-      "position:fixed;top:10px;left:10px;padding:8px 12px;border-radius:4px;font-family:monospace;font-size:12px;z-index:9999;transition:all 0.3s;";
-    document.body.appendChild(el);
-    return el;
-  }
-
-  private setStatus(msg: string, color: string) {
-    this.statusEl.textContent = msg;
-    this.statusEl.style.background = color;
-    this.statusEl.style.color = color === "#ffeb3b" ? "#000" : "#fff";
-    console.log(`[RotorArray] Status: ${msg}`);
-  }
-
   private init() {
-    this.setStatus("initializing...", "#2196f3");
-    this.setStatus("ready", "#4caf50");
-
-    setTimeout(() => {
-      this.statusEl.style.opacity = "0.5";
-    }, 5000);
-
     this.loadParameters();
     this.simManager.init();
     
