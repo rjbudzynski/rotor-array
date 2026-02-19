@@ -236,10 +236,13 @@ class App {
         imageBitmap?.close();
       } else if (imageBitmap) {
         try {
-          if (this.bitmapCtx) {
-            this.bitmapCtx.transferFromImageBitmap(imageBitmap);
-          } else if (this.ctx2d) {
+          // Visual debug: fill with red first to verify canvas is working
+          if (this.ctx2d) {
+            this.ctx2d.fillStyle = "rgba(255, 0, 0, 0.1)";
+            this.ctx2d.fillRect(0, 0, this.canvas.width, this.canvas.height);
             this.ctx2d.drawImage(imageBitmap, 0, 0);
+          } else if (this.bitmapCtx) {
+            this.bitmapCtx.transferFromImageBitmap(imageBitmap);
           }
         } catch (e) {
           console.error("Error in Canvas2D render:", e);
@@ -378,9 +381,13 @@ class App {
       this.ctx2d = this.canvas.getContext("2d");
       this.bitmapCtx = null;
       
+      // Ensure canvas is visible and on top
+      this.canvas.style.zIndex = "10";
+      
       // Clear the canvas to ensure clean state
       if (this.ctx2d) {
-        this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx2d.fillStyle = "#000";
+        this.ctx2d.fillRect(0, 0, this.canvas.width, this.canvas.height);
       }
     }
     
