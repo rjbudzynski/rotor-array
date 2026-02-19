@@ -39,7 +39,6 @@ class App {
   
   private lastUiUpdate = 0;
   private displaySize = 0;
-  private frameCount = 0;
 
   constructor() {
     this.renderer = new WebGLRenderer(this.webglCanvas);
@@ -230,39 +229,17 @@ class App {
         }
         imageBitmap?.close();
       } else if (imageBitmap) {
-        this.frameCount++;
         try {
-          console.log(`[Canvas2D] Frame #${this.frameCount}: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap ${imageBitmap.width}x${imageBitmap.height}`);
           if (this.bitmapCtx) {
-            console.log("[Canvas2D] Calling transferFromImageBitmap...");
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
-            console.log("[Canvas2D] transferFromImageBitmap succeeded");
           } else if (this.ctx2d) {
-            console.log("[Canvas2D] Calling drawImage...");
             this.ctx2d.drawImage(imageBitmap, 0, 0);
-            console.log("[Canvas2D] drawImage succeeded");
-          } else {
-            console.error("[Canvas2D] No rendering context available!");
           }
         } catch (e) {
-          console.error("[Canvas2D] Error in render:", e);
-          console.error("[Canvas2D] Error stack:", (e as Error).stack);
+          console.error("Error in Canvas2D render:", e);
         }
-        try {
-          imageBitmap.close();
-          console.log("[Canvas2D] Frame render complete, imageBitmap closed");
-        } catch (e) {
-          console.error("[Canvas2D] Error closing imageBitmap:", e);
-        }
-      } else {
-        console.log("[Canvas2D] No imageBitmap to render");
+        imageBitmap.close();
       }
-      
-      console.log(`[Canvas2D] Canvas state after render: ${this.canvas.width}x${this.canvas.height}, display=${this.canvas.style.display}, parent=${this.canvas.parentElement?.id}`);
-      
-      // Debug: check if canvas is actually in DOM and visible
-      const rect = this.canvas.getBoundingClientRect();
-      console.log(`[Canvas2D] Canvas bounds: ${rect.width}x${rect.height} at (${rect.left},${rect.top}), visible=${rect.width > 0 && rect.height > 0}`);
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
@@ -393,25 +370,14 @@ class App {
         this.webglCanvas.parentNode.removeChild(this.webglCanvas);
       }
       
-      console.log("[Mode Switch] Initializing Canvas2D contexts...");
-      // Ensure 2D contexts are initialized for Canvas2D rendering
-      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-      
-      console.log(`[Mode Switch] Canvas2D context ready: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}`);
-      console.log(`[Mode Switch] Canvas dimensions: ${this.canvas.width}x${this.canvas.height}`);
+      // Always use 2D context for Canvas2D mode (more reliable than bitmaprenderer on Linux)
+      this.ctx2d = this.canvas.getContext("2d");
+      this.bitmapCtx = null;
       
       // Clear the canvas to ensure clean state
-      if (this.bitmapCtx) {
-        // Bitmap context doesn't need clearing, but ensure canvas is ready
-      } else if (this.ctx2d) {
+      if (this.ctx2d) {
         this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
-      
-      // Force a reflow/repaint to ensure canvas is properly composited (Linux fix)
-      this.canvas.style.transform = "translateZ(0)";
-      void this.canvas.offsetHeight; // Force reflow
-      console.log("[Mode Switch] Forced canvas reflow for Linux compositing");
     }
     
     this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
