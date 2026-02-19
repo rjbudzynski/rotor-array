@@ -258,7 +258,11 @@ class App {
         console.log("[Canvas2D] No imageBitmap to render");
       }
       
-      console.log(`[Canvas2D] Canvas state after render: ${this.canvas.width}x${this.canvas.height}, visible=${this.canvas.style.display !== 'none'}`);
+      console.log(`[Canvas2D] Canvas state after render: ${this.canvas.width}x${this.canvas.height}, display=${this.canvas.style.display}, parent=${this.canvas.parentElement?.id}`);
+      
+      // Debug: check if canvas is actually in DOM and visible
+      const rect = this.canvas.getBoundingClientRect();
+      console.log(`[Canvas2D] Canvas bounds: ${rect.width}x${rect.height} at (${rect.left},${rect.top}), visible=${rect.width > 0 && rect.height > 0}`);
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
