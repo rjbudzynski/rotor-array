@@ -78,15 +78,14 @@ self.onmessage = async (e) => {
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);
 
       engine.set_state(theta, omega, 0);
-      
+
       if (!visualizer) {
         visualizer = new WasmVisualizer(lSide, upsample);
       } else {
         visualizer.set_dimensions(lSide, upsample);
       }
-      
-      if (typeof showArrowsPayload === "boolean") {
 
+      if (typeof showArrowsPayload === "boolean") {
         showArrows = showArrowsPayload;
       }
 
@@ -129,9 +128,6 @@ self.onmessage = async (e) => {
       if (payload.theta instanceof ArrayBuffer) {
         thetaPool.push(payload.theta);
       }
-      if (payload.omega instanceof ArrayBuffer) {
-        omegaPool.push(payload.omega);
-      }
       break;
 
     case "requestFrame":
@@ -149,14 +145,7 @@ self.onmessage = async (e) => {
 
 // Reusable buffers to avoid per-frame allocations
 const thetaPool: ArrayBuffer[] = [];
-const omegaPool: ArrayBuffer[] = [];
 let thetaBuffer: Float32Array | null = null;
-let omegaBuffer: Float32Array | null = null;
-
-
-
-// Always transfer raw arrays for WebGL2 texture pipeline
-const transferRawArrays = true;
 
 async function renderFrame() {
   if (!engine || !visualizer || !wasmExports) return;
@@ -207,61 +196,20 @@ async function renderFrame() {
         throw err;
       }
     }
+    if (showArrows) {
+      if (!thetaBuffer || thetaBuffer.byteLength === 0) {
+        const buf = thetaPool.pop();
+        if (buf && buf.byteLength === N * 4) {
+          thetaBuffer = new Float32Array(buf);
+        } else {
+          thetaBuffer = new Float32Array(N);
+        }
+      }
 
-
-            if (transferRawArrays || showArrows) {
-
-              // Create or reuse reusable buffers for theta/omega
-
-              // Check if current buffers are detached (byteLength === 0)
-
-              if (!thetaBuffer || thetaBuffer.byteLength === 0) {
-
-                const buf = thetaPool.pop();
-
-                if (buf && buf.byteLength === N * 4) {
-
-                  thetaBuffer = new Float32Array(buf);
-
-                } else {
-
-                  thetaBuffer = new Float32Array(N);
-
-                }
-
-              }
-
-              if (!omegaBuffer || omegaBuffer.byteLength === 0) {
-
-                const buf = omegaPool.pop();
-
-                if (buf && buf.byteLength === N * 4) {
-
-                  omegaBuffer = new Float32Array(buf);
-
-                } else {
-
-                  omegaBuffer = new Float32Array(N);
-
-                }
-
-              }
-
-        
-
-              // Copy theta/omega from WASM memory (F64 -> F32 conversion happens here)
-
-              const thetaView = new Float64Array(memory, thetaPtr, N);
-
-              const omegaView = new Float64Array(memory, omegaPtr, N);
-
-              thetaBuffer.set(thetaView);
-
-              omegaBuffer.set(omegaView);
-
-            }
-
-        
+      // Copy only theta for main-thread arrow overlay.
+      const thetaView = new Float64Array(memory, thetaPtr, N);
+      thetaBuffer.set(thetaView);
+    }
 
     // deno-lint-ignore no-explicit-any
     const opArr = (engine as any).get_order_parameter(); // [r, meanCos, meanSin] — single pass
@@ -275,7 +223,7 @@ async function renderFrame() {
     // Calculate current upsample for arrow rendering
     const upsample = Math.floor(canvasSize / currentLSide);
 
-    // Transfer ImageBitmap and theta/omega buffers to main thread
+    // Transfer ImageBitmap and optional theta buffer to main thread
     const payload = {
       imageBitmap,
       lSide: currentLSide,
@@ -289,17 +237,15 @@ async function renderFrame() {
       upsample: number;
       orderParameter: typeof op;
       theta?: ArrayBuffer;
-      omega?: ArrayBuffer;
     };
 
     const transfer: Transferable[] = [];
     if (imageBitmap) {
       transfer.push(imageBitmap);
     }
-    if ((transferRawArrays || showArrows) && thetaBuffer && omegaBuffer) {
+    if (showArrows && thetaBuffer) {
       payload.theta = thetaBuffer.buffer as ArrayBuffer;
-      payload.omega = omegaBuffer.buffer as ArrayBuffer;
-      transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
+      transfer.push(thetaBuffer.buffer);
     }
 
     self.postMessage({
@@ -307,9 +253,8 @@ async function renderFrame() {
       payload,
     }, transfer);
 
-    // Buffers are now transferred and unusable - always clear them
+    // Buffer is now transferred and unusable - always clear it
     thetaBuffer = null;
-    omegaBuffer = null;
 
     lastEmit = performance.now();
   } finally {

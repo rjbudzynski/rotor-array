@@ -2,8 +2,8 @@
 
 export interface FramePayload {
   imageBitmap?: ImageBitmap;
-  theta: ArrayBuffer;
-  omega: ArrayBuffer;
+  theta?: ArrayBuffer;
+  omega?: ArrayBuffer;
   orderParameter: {
     r: number;
     meanCos: number;
@@ -49,7 +49,9 @@ export class SimulationManager {
           this.frameSubscribers.forEach((sub) => sub(payload as FramePayload));
           break;
         case "energyStats":
-          this.energyStatsSubscribers.forEach((sub) => sub(payload as EnergyStatsPayload));
+          this.energyStatsSubscribers.forEach((sub) =>
+            sub(payload as EnergyStatsPayload)
+          );
           break;
       }
     };

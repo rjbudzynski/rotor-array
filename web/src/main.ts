@@ -11,45 +11,54 @@ import {
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
 import { FramePayload, SimulationManager } from "./simulation_manager.ts";
+import {
+  getStoredBoolean,
+  getStoredNumberWithLegacyScaling,
+  getStoredString,
+} from "./persistence.ts";
 
 const STORAGE_KEY = "rotorArrayParams";
 
 class App {
   private canvas = document.getElementById("sim-canvas") as HTMLCanvasElement;
-  private overlayCanvas = document.getElementById("overlay-canvas") as HTMLCanvasElement;
-  private mdCanvas = document.getElementById("mean-dir-canvas") as HTMLCanvasElement;
-  
+  private overlayCanvas = document.getElementById(
+    "overlay-canvas",
+  ) as HTMLCanvasElement;
+  private mdCanvas = document.getElementById(
+    "mean-dir-canvas",
+  ) as HTMLCanvasElement;
+
   private simManager: SimulationManager;
-  
+
   private mdViz: MeanDirectionVisualizer;
   private plot: OrderPlot;
   private controls: ControlPanel;
-  
+
   private bitmapCtx: ImageBitmapRenderingContext | null;
   private ctx2d: CanvasRenderingContext2D | null;
   private overlayCtx: CanvasRenderingContext2D;
-  
+
   private energyPerNodeEl = document.getElementById("energy-per-node-value");
   private energyRelDevEl = document.getElementById("energy-rel-dev-value");
-  
+
   private lastUiUpdate = 0;
   private displaySize = 0;
 
   constructor() {
     this.simManager = new SimulationManager();
-    
+
     this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
     this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-    
+
     const overlayCtx = this.overlayCanvas.getContext("2d");
     if (!overlayCtx) throw new Error("Failed to get overlay canvas context");
     this.overlayCtx = overlayCtx;
-    
+
     this.mdViz = new MeanDirectionVisualizer(this.mdCanvas);
     this.plot = new OrderPlot("uplot-chart");
     this.controls = new ControlPanel("controls-container");
     new ColorBarVisualizer("color-bar-container");
-    
+
     this.setupListeners();
     this.setupResizeObserver();
     this.init();
@@ -63,7 +72,7 @@ class App {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         const size = Math.max(100, Math.min(width, height));
-        
+
         if (size !== this.displaySize) {
           this.displaySize = size;
           const stack = document.getElementById("canvas-stack");
@@ -71,9 +80,10 @@ class App {
             stack.style.width = `${size}px`;
             stack.style.height = `${size}px`;
           }
-          
+
           // Trigger a re-calculation of upsample without full reset
-          const lSide = parseInt(this.controls.lInput.value) || DEFAULT_LATTICE_SIZE;
+          const lSide = parseInt(this.controls.lInput.value) ||
+            DEFAULT_LATTICE_SIZE;
           const upsample = Math.max(1, Math.floor(this.displaySize / lSide));
           this.simManager.updateUpsample(upsample);
         }
@@ -85,7 +95,7 @@ class App {
   private init() {
     this.loadParameters();
     this.simManager.init();
-    
+
     setTimeout(() => {
       this.controls.triggerReset();
     }, 200);
@@ -93,20 +103,26 @@ class App {
 
   private setupListeners() {
     this.simManager.onFrame((payload) => this.handleFrame(payload));
-    
+
     this.simManager.onEnergyStats((payload) => {
       if (this.energyPerNodeEl) {
         this.energyPerNodeEl.textContent = this.formatNumber(payload.perNode);
       }
       if (this.energyRelDevEl) {
-        this.energyRelDevEl.textContent = this.formatRelDeviation(payload.relDev);
+        this.energyRelDevEl.textContent = this.formatRelDeviation(
+          payload.relDev,
+        );
       }
     });
 
-    this.controls.onReset = (preset, k, p2, p3, temp) => this.handleReset(preset, k, p2, p3, temp);
-    this.controls.onParamChange = (j, m, t) => this.simManager.updateParams(j, m, t);
-    this.controls.onArrowChange = (show) => this.simManager.setRenderOptions(show);
-    this.controls.onStartStop = (running) => running ? this.simManager.start() : this.simManager.stop();
+    this.controls.onReset = (preset, k, p2, p3, temp) =>
+      this.handleReset(preset, k, p2, p3, temp);
+    this.controls.onParamChange = (j, m, t) =>
+      this.simManager.updateParams(j, m, t);
+    this.controls.onArrowChange = (show) =>
+      this.simManager.setRenderOptions(show);
+    this.controls.onStartStop = (running) =>
+      running ? this.simManager.start() : this.simManager.stop();
 
     // Help Dialog
     const helpBtn = document.getElementById("help-btn");
@@ -126,27 +142,40 @@ class App {
     // Persistence
     globalThis.addEventListener("beforeunload", () => this.saveParameters());
     const inputs = [
-      this.controls.jInput, this.controls.mInput, this.controls.timeInput,
-      this.controls.tempInput, this.controls.lInput, this.controls.presetSelect,
-      this.controls.arrowCheck
+      this.controls.jInput,
+      this.controls.mInput,
+      this.controls.timeInput,
+      this.controls.tempInput,
+      this.controls.lInput,
+      this.controls.presetSelect,
+      this.controls.arrowCheck,
     ];
-    inputs.forEach(input => input.addEventListener("change", () => this.saveParameters()));
+    inputs.forEach((input) =>
+      input.addEventListener("change", () => this.saveParameters())
+    );
   }
 
   private handleFrame(payload: FramePayload) {
     try {
       const {
-        imageBitmap, theta: thetaBuf, omega: omegaBuf,
-        orderParameter, lSide, canvasSize, upsample,
+        imageBitmap,
+        theta: thetaBuf,
+        omega: omegaBuf,
+        orderParameter,
+        lSide,
+        canvasSize,
+        upsample,
       } = payload;
 
       // Resize canvases if needed
-      if (this.canvas.width !== canvasSize || this.canvas.height !== canvasSize) {
+      if (
+        this.canvas.width !== canvasSize || this.canvas.height !== canvasSize
+      ) {
         this.canvas.width = canvasSize;
         this.canvas.height = canvasSize;
         this.overlayCanvas.width = canvasSize;
         this.overlayCanvas.height = canvasSize;
-        
+
         // Canvas resize destroys the 2D context - must recreate it
         this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
         this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
@@ -166,14 +195,27 @@ class App {
         imageBitmap.close();
       }
 
-      this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+      this.overlayCtx.clearRect(
+        0,
+        0,
+        this.overlayCanvas.width,
+        this.overlayCanvas.height,
+      );
 
       // Draw arrows if enabled and disks are large enough
-      if (this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 && lSide <= 60) {
+      if (
+        this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 &&
+        lSide <= 60
+      ) {
         try {
           // Check buffer is valid before creating Float32Array
           if (thetaBuf.byteLength > 0) {
-            this.drawArrows(this.overlayCtx, new Float32Array(thetaBuf), lSide, upsample);
+            this.drawArrows(
+              this.overlayCtx,
+              new Float32Array(thetaBuf),
+              lSide,
+              upsample,
+            );
           }
         } catch (e) {
           console.error("Error drawing arrows:", e);
@@ -187,7 +229,11 @@ class App {
       if (now - this.lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
         try {
           this.plot.push(orderParameter.t, orderParameter.r);
-          this.mdViz.update(orderParameter.r, orderParameter.meanCos, orderParameter.meanSin);
+          this.mdViz.update(
+            orderParameter.r,
+            orderParameter.meanCos,
+            orderParameter.meanSin,
+          );
         } catch (e) {
           console.error("Error updating UI:", e);
         }
@@ -198,14 +244,21 @@ class App {
     }
   }
 
-  private handleReset(_preset: string, _k: number, _p2: number, _p3: number, temp: number) {
+  private handleReset(
+    _preset: string,
+    _k: number,
+    _p2: number,
+    _p3: number,
+    temp: number,
+  ) {
     const lSide = parseInt(this.controls.lInput.value) || DEFAULT_LATTICE_SIZE;
     const { theta, omega } = generateInitialState(
-      lSide, this.controls.presetSelect.value, 
-      parseFloat(this.controls.kInput.value), 
-      parseFloat(this.controls.p2Input.value), 
-      parseFloat(this.controls.p3Input.value), 
-      temp
+      lSide,
+      this.controls.presetSelect.value,
+      parseFloat(this.controls.kInput.value),
+      parseFloat(this.controls.p2Input.value),
+      parseFloat(this.controls.p3Input.value),
+      temp,
     );
 
     const container = this.canvas.parentElement;
@@ -232,13 +285,16 @@ class App {
     this.controls.toggleInputs(true);
   }
 
-
-
-  private drawArrows(ctx: CanvasRenderingContext2D, theta: Float32Array, lSide: number, upsample: number) {
+  private drawArrows(
+    ctx: CanvasRenderingContext2D,
+    theta: Float32Array,
+    lSide: number,
+    upsample: number,
+  ) {
     const L = lSide;
     const S = upsample;
     const centerOffset = (S - 1) / 2.0;
-    
+
     // Scale factor to match the [-0.5, 0.5] range of WebGL geometry into pixel space
     const scale = S;
 
@@ -256,7 +312,7 @@ class App {
         ctx.translate(cx, cy);
         ctx.rotate(-th); // CCW rotation parity
         ctx.scale(scale, scale);
-        
+
         // Ensure line width is exactly 1 pixel in screen space (or 0.5 unit if scale=1)
         ctx.lineWidth = 0.5 / scale;
 
@@ -311,34 +367,46 @@ class App {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const params = JSON.parse(saved);
-        if (params.lSide) this.controls.lInput.value = params.lSide;
-        if (params.preset) this.controls.presetSelect.value = params.preset;
-        if (params.j) {
-          let val = parseFloat(params.j);
-          if (val > 20) val /= 100; // Migration from old 0-2000 range
-          this.controls.jInput.value = val.toString();
+        const params = JSON.parse(saved) as Record<string, unknown>;
+        const lSide = getStoredString(params, "lSide");
+        if (lSide !== undefined) this.controls.lInput.value = lSide;
+
+        const preset = getStoredString(params, "preset");
+        if (preset !== undefined) this.controls.presetSelect.value = preset;
+
+        const j = getStoredNumberWithLegacyScaling(params, "j", 20);
+        if (j !== undefined) {
+          this.controls.jInput.value = j.toString();
           this.controls.jInput.dispatchEvent(new Event("input"));
         }
-        if (params.m) {
-          let val = parseFloat(params.m);
-          if (val > 10) val /= 100; // Migration from old 0-1000 range
-          this.controls.mInput.value = val.toString();
+
+        const m = getStoredNumberWithLegacyScaling(params, "m", 10);
+        if (m !== undefined) {
+          this.controls.mInput.value = m.toString();
           this.controls.mInput.dispatchEvent(new Event("input"));
         }
-        if (params.timeScale) {
-          let val = parseFloat(params.timeScale);
-          if (val > 10) val /= 100; // Migration from old 10-500 range
-          this.controls.timeInput.value = val.toString();
+
+        const timeScale = getStoredNumberWithLegacyScaling(
+          params,
+          "timeScale",
+          10,
+        );
+        if (timeScale !== undefined) {
+          this.controls.timeInput.value = timeScale.toString();
           this.controls.timeInput.dispatchEvent(new Event("input"));
         }
-        if (params.temp) {
-          let val = parseFloat(params.temp);
-          if (val > 2) val /= 100; // Migration from old 0-200 range
-          this.controls.tempInput.value = val.toString();
+
+        const temp = getStoredNumberWithLegacyScaling(params, "temp", 2);
+        if (temp !== undefined) {
+          this.controls.tempInput.value = temp.toString();
           this.controls.tempInput.dispatchEvent(new Event("input"));
         }
-        if (params.showArrows !== undefined) this.controls.arrowCheck.checked = params.showArrows;
+
+        const showArrows = getStoredBoolean(params, "showArrows");
+        if (showArrows !== undefined) {
+          this.controls.arrowCheck.checked = showArrows;
+        }
+
         this.controls.updatePresetUI();
       }
     } catch { /* ignore */ }
