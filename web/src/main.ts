@@ -41,8 +41,6 @@ class App {
     this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
     this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
     
-    console.log("[Init] Canvas contexts created:", { bitmapCtx: !!this.bitmapCtx, ctx2d: !!this.ctx2d, canvasSize: `${this.canvas.width}x${this.canvas.height}` });
-    
     const overlayCtx = this.overlayCanvas.getContext("2d");
     if (!overlayCtx) throw new Error("Failed to get overlay canvas context");
     this.overlayCtx = overlayCtx;
@@ -146,11 +144,8 @@ class App {
         orderParameter, lSide, canvasSize, upsample,
       } = payload;
 
-      console.log("[Frame] Received:", { hasImageBitmap: !!imageBitmap, imageBitmapSize: imageBitmap ? `${imageBitmap.width}x${imageBitmap.height}` : 'none', targetCanvasSize: `${canvasSize}x${canvasSize}`, currentCanvasSize: `${this.canvas.width}x${this.canvas.height}`, bitmapCtx: !!this.bitmapCtx, ctx2d: !!this.ctx2d });
-
       // Resize canvases if needed
       if (this.canvas.width !== canvasSize || this.canvas.height !== canvasSize) {
-        console.log("[Frame] Resizing canvas from", `${this.canvas.width}x${this.canvas.height}`, "to", `${canvasSize}x${canvasSize}`);
         this.canvas.width = canvasSize;
         this.canvas.height = canvasSize;
         this.overlayCanvas.width = canvasSize;
@@ -159,28 +154,20 @@ class App {
         // Canvas resize destroys the 2D context - must recreate it
         this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
         this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-        console.log("[Frame] Contexts after resize:", { bitmapCtx: !!this.bitmapCtx, ctx2d: !!this.ctx2d });
       }
 
       // Draw ImageBitmap from WASM visualization
       if (imageBitmap) {
-        console.log("[Frame] Drawing imageBitmap...");
         try {
           if (this.bitmapCtx) {
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
-            console.log("[Frame] transferFromImageBitmap succeeded");
           } else if (this.ctx2d) {
             this.ctx2d.drawImage(imageBitmap, 0, 0);
-            console.log("[Frame] drawImage succeeded");
-          } else {
-            console.error("[Frame] No rendering context available!");
           }
         } catch (e) {
           console.error("Error in Canvas2D render:", e);
         }
         imageBitmap.close();
-      } else {
-        console.log("[Frame] No imageBitmap to render");
       }
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);

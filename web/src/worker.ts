@@ -33,7 +33,7 @@ let lastEmit = 0;
 let lastEnergyEmit = 0;
 let initialEnergyPerNode = 0;
 let showArrows = true;
-let renderMode: "webgl2" | "canvas2d" = "webgl2";
+let renderMode: "canvas2d" = "canvas2d";
 
 let initPromise: Promise<WasmExports> | null = null;
 
