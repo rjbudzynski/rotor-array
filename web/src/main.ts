@@ -205,8 +205,14 @@ class App {
         this.webglCanvas.height = canvasSize;
         
         // Canvas resize destroys the 2D context - must recreate it
-        this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-        this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+        // Use 2D context for Canvas2D mode, bitmaprenderer for WebGL fallback
+        if (this.useWebGL2Rendering) {
+          this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+          this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+        } else {
+          this.ctx2d = this.canvas.getContext("2d");
+          this.bitmapCtx = null;
+        }
       }
 
       // Only update WebGL textures in WebGL mode and with valid buffers
