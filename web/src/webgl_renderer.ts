@@ -69,23 +69,18 @@ export class WebGLRenderer {
       (e) => {
         // Suppress all events if destroyed - prevents late events from causing issues
         if (this.isDestroyed) {
-          console.log("[WebGL] Ignoring context lost event - renderer is destroyed");
           return;
         }
-        console.warn("[WebGL] Context lost");
         this.webglContextLost = true;
         e.preventDefault(); // Allow restoration
       },
       () => {
         // Suppress all events if destroyed
         if (this.isDestroyed) {
-          console.log("[WebGL] Ignoring context restored event - renderer is destroyed");
           return;
         }
-        console.log("[WebGL] Context restored");
         // Skip if we already have a valid context (was manually re-initialized)
         if (this.webgl && !this.webgl.gl.isContextLost()) {
-          console.log("[WebGL] Context already restored, skipping auto-restore");
           return;
         }
         this.webglContextLost = false;

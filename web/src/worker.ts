@@ -194,13 +194,10 @@ async function renderFrame() {
       canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
       const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
-      console.log(`[Worker] Creating ImageBitmap: ${canvasSize}x${canvasSize}, rgbaSize=${rgbaSize}`);
-
       // Create ImageBitmap for efficient transfer to main thread
       try {
         // Direct creation from ImageData is usually well-optimized
         imageBitmap = await createImageBitmap(imageData);
-        console.log(`[Worker] ImageBitmap created successfully: ${imageBitmap.width}x${imageBitmap.height}`);
       } catch (err) {
         console.error("Failed to create ImageBitmap from ImageData:", err);
         // Fallback: try using OffscreenCanvas if available
@@ -312,16 +309,12 @@ async function renderFrame() {
     const transfer: Transferable[] = [];
     if (imageBitmap) {
       transfer.push(imageBitmap);
-      console.log(`[Worker] Added imageBitmap to transfer list`);
     }
     if ((transferRawArrays || showArrows) && thetaBuffer && omegaBuffer) {
       payload.theta = thetaBuffer.buffer as ArrayBuffer;
       payload.omega = omegaBuffer.buffer as ArrayBuffer;
       transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
-      console.log(`[Worker] Added theta/omega buffers to transfer list`);
     }
-
-    console.log(`[Worker] Sending frame: mode=${renderMode}, imageBitmap=${!!imageBitmap}, imageBitmapDims=${imageBitmap ? `${imageBitmap.width}x${imageBitmap.height}` : 'none'}, transferCount=${transfer.length}`);
 
     self.postMessage({
       type: "frame",

@@ -358,13 +358,11 @@ class App {
       this.useWebGL2Rendering = false;
       this.setStatus("Canvas2D", "#2196f3");
       
-      console.log("[Mode Switch] Destroying WebGL renderer...");
       // Destroy and remove the WebGL canvas to free GPU resources
       if (this.renderer.isInitialized()) {
         this.renderer.destroy();
       }
       
-      console.log("[Mode Switch] Removing WebGL canvas from DOM...");
       // Remove canvas from DOM to fully release GPU resources
       if (this.webglCanvas.parentNode) {
         this.webglCanvas.parentNode.removeChild(this.webglCanvas);
