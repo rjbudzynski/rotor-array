@@ -39,6 +39,7 @@ class App {
   
   private lastUiUpdate = 0;
   private displaySize = 0;
+  private frameCount = 0;
 
   constructor() {
     this.renderer = new WebGLRenderer(this.webglCanvas);
@@ -229,8 +230,9 @@ class App {
         }
         imageBitmap?.close();
       } else if (imageBitmap) {
+        this.frameCount++;
         try {
-          console.log(`[Canvas2D] Rendering: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap width=${imageBitmap.width}, height=${imageBitmap.height}`);
+          console.log(`[Canvas2D] Frame #${this.frameCount}: bitmapCtx=${!!this.bitmapCtx}, ctx2d=${!!this.ctx2d}, imageBitmap ${imageBitmap.width}x${imageBitmap.height}`);
           if (this.bitmapCtx) {
             console.log("[Canvas2D] Calling transferFromImageBitmap...");
             this.bitmapCtx.transferFromImageBitmap(imageBitmap);
@@ -248,12 +250,15 @@ class App {
         }
         try {
           imageBitmap.close();
+          console.log("[Canvas2D] Frame render complete, imageBitmap closed");
         } catch (e) {
           console.error("[Canvas2D] Error closing imageBitmap:", e);
         }
       } else {
         console.log("[Canvas2D] No imageBitmap to render");
       }
+      
+      console.log(`[Canvas2D] Canvas state after render: ${this.canvas.width}x${this.canvas.height}, visible=${this.canvas.style.display !== 'none'}`);
 
       this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
 
