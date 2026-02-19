@@ -108,13 +108,6 @@ export class SimulationManager {
     });
   }
 
-  public setRenderMode(mode: "webgl2" | "canvas2d") {
-    this.worker.postMessage({
-      type: "setRenderMode",
-      payload: { mode },
-    });
-  }
-
   public returnBuffers(theta?: ArrayBuffer, omega?: ArrayBuffer) {
     const transfer: Transferable[] = [];
     const payload: { theta?: ArrayBuffer; omega?: ArrayBuffer } = {};

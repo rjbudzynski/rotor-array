@@ -33,7 +33,6 @@ let lastEmit = 0;
 let lastEnergyEmit = 0;
 let initialEnergyPerNode = 0;
 let showArrows = true;
-let renderMode: "canvas2d" = "canvas2d";
 
 let initPromise: Promise<WasmExports> | null = null;
 
@@ -126,15 +125,6 @@ self.onmessage = async (e) => {
       }
       break;
 
-    case "setRenderMode":
-      if (payload.mode === "webgl2" || payload.mode === "canvas2d") {
-        renderMode = payload.mode;
-        // Reset buffers to prevent issues with transferred but not-yet-returned buffers
-        thetaBuffer = null;
-        omegaBuffer = null;
-      }
-      break;
-
     case "returnBuffers":
       if (payload.theta instanceof ArrayBuffer) {
         thetaPool.push(payload.theta);
@@ -182,44 +172,40 @@ async function renderFrame() {
     let imageBitmap: ImageBitmap | undefined;
     let canvasSize = 0;
 
-    if (renderMode === "canvas2d") {
-      visualizer.update(thetaPtr, omegaPtr, N);
+    // Generate visualization
+    visualizer.update(thetaPtr, omegaPtr, N);
 
-      // Get WASM memory pointers and sizes for pixel data
-      const rgbaPtr = visualizer.get_rgba_ptr();
-      const rgbaSize = visualizer.get_rgba_size();
+    // Get WASM memory pointers and sizes for pixel data
+    const rgbaPtr = visualizer.get_rgba_ptr();
+    const rgbaSize = visualizer.get_rgba_size();
 
-      // Create ImageData from WASM memory (zero-copy view)
-      const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
-      canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
-      const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
+    // Create ImageData from WASM memory (zero-copy view)
+    const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
+    canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
+    const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
-      // Create ImageBitmap for efficient transfer to main thread
-      try {
-        // Direct creation from ImageData is usually well-optimized
-        imageBitmap = await createImageBitmap(imageData);
-      } catch (err) {
-        console.error("Failed to create ImageBitmap from ImageData:", err);
-        // Fallback: try using OffscreenCanvas if available
-        if (canUseOffscreenCanvas) {
-          if (!offscreenCanvas || offscreenSize !== canvasSize) {
-            offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
-            offscreenCtx = offscreenCanvas.getContext("2d");
-            offscreenSize = canvasSize;
-          }
-          if (offscreenCanvas && offscreenCtx) {
-            offscreenCtx.putImageData(imageData, 0, 0);
-            imageBitmap = offscreenCanvas.transferToImageBitmap();
-          } else {
-            throw err;
-          }
+    // Create ImageBitmap for efficient transfer to main thread
+    try {
+      // Direct creation from ImageData is usually well-optimized
+      imageBitmap = await createImageBitmap(imageData);
+    } catch (err) {
+      console.error("Failed to create ImageBitmap from ImageData:", err);
+      // Fallback: try using OffscreenCanvas if available
+      if (canUseOffscreenCanvas) {
+        if (!offscreenCanvas || offscreenSize !== canvasSize) {
+          offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
+          offscreenCtx = offscreenCanvas.getContext("2d");
+          offscreenSize = canvasSize;
+        }
+        if (offscreenCanvas && offscreenCtx) {
+          offscreenCtx.putImageData(imageData, 0, 0);
+          imageBitmap = offscreenCanvas.transferToImageBitmap();
         } else {
           throw err;
         }
+      } else {
+        throw err;
       }
-    } else {
-      // In WebGL2 mode, we still need to know the target canvas size for upsample calculations
-      canvasSize = currentLSide * currentUpsample;
     }
 
 

@@ -92,10 +92,6 @@ class App {
   }
 
   private setupListeners() {
-    this.simManager.onInitialized(() => {
-      this.simManager.setRenderMode("canvas2d");
-    });
-
     this.simManager.onFrame((payload) => this.handleFrame(payload));
     
     this.simManager.onEnergyStats((payload) => {
