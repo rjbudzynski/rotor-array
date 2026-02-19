@@ -407,6 +407,11 @@ class App {
       } else if (this.ctx2d) {
         this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
+      
+      // Force a reflow/repaint to ensure canvas is properly composited (Linux fix)
+      this.canvas.style.transform = "translateZ(0)";
+      void this.canvas.offsetHeight; // Force reflow
+      console.log("[Mode Switch] Forced canvas reflow for Linux compositing");
     }
     
     this.simManager.setRenderMode(this.useWebGL2Rendering ? "webgl2" : "canvas2d");
