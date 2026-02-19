@@ -205,14 +205,8 @@ class App {
         this.webglCanvas.height = canvasSize;
         
         // Canvas resize destroys the 2D context - must recreate it
-        // Use 2D context for Canvas2D mode, bitmaprenderer for WebGL fallback
-        if (this.useWebGL2Rendering) {
-          this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-          this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
-        } else {
-          this.ctx2d = this.canvas.getContext("2d");
-          this.bitmapCtx = null;
-        }
+        this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+        this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
       }
 
       // Only update WebGL textures in WebGL mode and with valid buffers
@@ -374,12 +368,14 @@ class App {
         this.webglCanvas.parentNode.removeChild(this.webglCanvas);
       }
       
-      // Always use 2D context for Canvas2D mode (more reliable than bitmaprenderer on Linux)
-      this.ctx2d = this.canvas.getContext("2d");
-      this.bitmapCtx = null;
+      // Use bitmaprenderer if available (macOS), fallback to 2D (Linux)
+      this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
+      this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
       
       // Clear the canvas to ensure clean state
-      if (this.ctx2d) {
+      if (this.bitmapCtx) {
+        // Bitmap context doesn't need clearing
+      } else if (this.ctx2d) {
         this.ctx2d.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
     }
