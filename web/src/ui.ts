@@ -325,7 +325,7 @@ export class ControlPanel {
     this.updatePresetUI();
   }
 
-  updatePresetUI() {
+  updatePresetUI(skipDefaults: boolean = false) {
     const name = this.presetSelect.value;
     const p = getPresetByName(name);
     // Update labels and visibility
@@ -356,12 +356,11 @@ export class ControlPanel {
       if (this.p3Container.style) this.p3Container.style.display = "none";
     }
 
-    // Only load defaults if the preset itself changed.
-    // This prevents overwriting loaded values on init or manual changes when L changes.
-    if (name !== this.currentPreset) {
+    // Only load defaults if not skipped AND the preset itself changed.
+    if (!skipDefaults && name !== this.currentPreset) {
       this.loadPresetDefaults();
-      this.currentPreset = name;
     }
+    this.currentPreset = name;
   }
 
   loadPresetDefaults() {

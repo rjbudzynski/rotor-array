@@ -421,7 +421,7 @@ class App {
           this.controls.arrowCheck.checked = showArrows;
         }
 
-        this.controls.updatePresetUI();
+        this.controls.updatePresetUI(true);
       }
     } catch { /* ignore */ }
   }
