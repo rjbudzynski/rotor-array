@@ -3,6 +3,7 @@ mod simulation;
 mod visualizer;
 
 use wasm_bindgen::prelude::*;
+use js_sys::Float64Array;
 use simulation::{SimulationEngine, SimulationParams};
 use visualizer::Visualizer;
 
@@ -54,16 +55,14 @@ impl WasmSimulationEngine {
         self.engine.get_energy()
     }
 
-    pub fn get_order_parameter_r(&self) -> f64 {
-        self.engine.get_order_parameter().0
-    }
-
-    pub fn get_order_parameter_mean_cos(&self) -> f64 {
-        self.engine.get_order_parameter().1
-    }
-
-    pub fn get_order_parameter_mean_sin(&self) -> f64 {
-        self.engine.get_order_parameter().2
+    /// Returns [r, mean_cos, mean_sin] in a single pass over the lattice.
+    pub fn get_order_parameter(&self) -> Float64Array {
+        let (r, mean_cos, mean_sin) = self.engine.get_order_parameter();
+        let arr = Float64Array::new_with_length(3);
+        arr.set_index(0, r);
+        arr.set_index(1, mean_cos);
+        arr.set_index(2, mean_sin);
+        arr
     }
 }
 
@@ -92,10 +91,10 @@ impl WasmVisualizer {
     }
 
     pub fn get_rgba_ptr(&self) -> *const u8 {
-        self.visualizer.rgba_buffer.as_ptr()
+        self.visualizer.rgba_buffer.as_ptr() as *const u8
     }
 
     pub fn get_rgba_size(&self) -> usize {
-        self.visualizer.rgba_buffer.len()
+        self.visualizer.rgba_buffer.len() * 4
     }
 }

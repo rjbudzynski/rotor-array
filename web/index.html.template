@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotor Array Simulation</title>
     <link rel="stylesheet" href="bundle.css">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -10,8 +11,8 @@
     <div id="app">
         <div id="canvas-container">
             <div id="canvas-stack">
-                <canvas id="sim-canvas"></canvas>
-                <canvas id="overlay-canvas"></canvas>
+                <canvas id="sim-canvas" class="sim-layer"></canvas>
+                <canvas id="overlay-canvas" class="sim-layer"></canvas>
             </div>
         </div>
         <div id="sidebar">

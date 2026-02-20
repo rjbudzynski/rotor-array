@@ -56,24 +56,18 @@ impl SimulationParams {
 pub struct RotorArray {
     pub params: SimulationParams,
     pub lut: TrigLut,
-    force_h: Vec<f64>,
-    force_v: Vec<f64>,
 }
 
 impl RotorArray {
     pub fn new(params: SimulationParams) -> Self {
-        let n = params.n_rotors();
         RotorArray { 
             params,
             lut: TrigLut::new(),
-            force_h: vec![0.0; n],
-            force_v: vec![0.0; n],
         }
     }
 
-    pub fn resize(&mut self, n: usize) {
-        self.force_h.resize(n, 0.0);
-        self.force_v.resize(n, 0.0);
+    pub fn resize(&mut self, _n: usize) {
+        // Shared buffers are managed by SimulationEngine
     }
 
     pub fn get_acceleration(&self, theta: &[f64], out_accel: &mut [f64], force_h: &mut [f64], force_v: &mut [f64]) {
@@ -168,7 +162,6 @@ impl RotorArray {
 }
 
 pub struct SimulationEngine {
-    pub params: SimulationParams,
     pub array: RotorArray,
     pub theta: Vec<f64>,
     pub omega: Vec<f64>,
@@ -186,7 +179,6 @@ impl SimulationEngine {
     pub fn new(params: SimulationParams) -> Self {
         let n = params.n_rotors();
         SimulationEngine {
-            params,
             array: RotorArray::new(params),
             theta: vec![0.0; n],
             omega: vec![0.0; n],
@@ -219,17 +211,16 @@ impl SimulationEngine {
 
     pub fn update_params(&mut self, j: Option<f64>, m: Option<f64>) {
         if let Some(j_val) = j {
-            self.params.j_coupling = j_val;
+            self.array.params.j_coupling = j_val;
         }
         if let Some(m_val) = m {
-            self.params.m_field = m_val;
+            self.array.params.m_field = m_val;
         }
-        self.array.params = self.params;
         self.accel_dirty = true;
     }
 
     pub fn verlet_step(&mut self, dt: f64) {
-        let n = self.params.n_rotors();
+        let n = self.array.params.n_rotors();
         let half_dt = dt * 0.5;
 
         if self.accel_dirty {
@@ -271,8 +262,8 @@ impl SimulationEngine {
 
     pub fn step(&mut self, dt: f64) {
         if self.adaptive_substepping {
-            let j = self.params.j_coupling.abs();
-            let m = self.params.m_field.abs();
+            let j = self.array.params.j_coupling.abs();
+            let m = self.array.params.m_field.abs();
             let omega_max = (8.0 * j + m + 1e-9).sqrt();
             self.substeps = ((dt * omega_max) / self.stability_factor).ceil() as usize;
             if self.substeps == 0 {

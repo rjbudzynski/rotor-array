@@ -3,7 +3,7 @@ use crate::colors::ColorLut;
 pub struct Visualizer {
     pub l_side: usize,
     pub upsample: usize,
-    pub rgba_buffer: Vec<u8>,
+    pub rgba_buffer: Vec<u32>,
     mask: Vec<u8>,
     lut: ColorLut,
 }
@@ -14,7 +14,7 @@ impl Visualizer {
         let mut vis = Visualizer {
             l_side,
             upsample,
-            rgba_buffer: vec![0; size * size * 4],
+            rgba_buffer: vec![0xFF000000; size * size],
             mask: Vec::new(),
             lut: ColorLut::new(),
         };
@@ -27,10 +27,11 @@ impl Visualizer {
             self.l_side = l_side;
             self.upsample = upsample;
             let size = l_side * upsample;
-            self.rgba_buffer.resize(size * size * 4, 0);
+            self.rgba_buffer.resize(size * size, 0xFF000000);
             self.update_buffers();
         }
     }
+
 
     fn update_buffers(&mut self) {
         let s = self.upsample;
@@ -63,13 +64,7 @@ impl Visualizer {
         let s = self.upsample;
         let total_w = l * s;
         
-        // Use u32 pointer for 4x faster clear [0, 0, 0, 255]
-        // 0xFF000000 is Big Endian for [0, 0, 0, 255] but on Little Endian WASM 
-        // we likely want 0xFF000000 (A B G R). 
-        let data32: &mut [u32] = unsafe {
-            std::slice::from_raw_parts_mut(self.rgba_buffer.as_mut_ptr() as *mut u32, total_w * total_w)
-        };
-        data32.fill(0xFF000000);
+        self.rgba_buffer.fill(0xFF000000);
 
         let has_mask = !self.mask.is_empty();
 
@@ -85,7 +80,7 @@ impl Visualizer {
                 
                 if has_mask {
                     for my in 0..s {
-                        let row_idx = (start_y + my) * total_w * 4;
+                        let row_idx = (start_y + my) * total_w;
                         let m_row_idx = my * s;
                         for mx in 0..s {
                             let alpha = unsafe { *self.mask.get_unchecked(m_row_idx + mx) };
@@ -93,25 +88,22 @@ impl Visualizer {
                                 continue;
                             }
                             
-                            let p_idx = row_idx + (start_x + mx) * 4;
+                            let p_idx = row_idx + (start_x + mx);
+                            // Combine RGB and alpha into u32 (Little Endian: AABBGGRR)
+                            let pixel = (alpha as u32) << 24 | (b_int as u32) << 16 | (g_int as u32) << 8 | (r_int as u32);
                             unsafe {
-                                *self.rgba_buffer.get_unchecked_mut(p_idx) = r_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 1) = g_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 2) = b_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 3) = alpha;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx) = pixel;
                             }
                         }
                     }
                 } else {
+                    let pixel = 0xFF000000 | (b_int as u32) << 16 | (g_int as u32) << 8 | (r_int as u32);
                     for my in 0..s {
-                        let row_idx = (start_y + my) * total_w * 4;
+                        let row_idx = (start_y + my) * total_w;
                         for mx in 0..s {
-                            let p_idx = row_idx + (start_x + mx) * 4;
+                            let p_idx = row_idx + (start_x + mx);
                             unsafe {
-                                *self.rgba_buffer.get_unchecked_mut(p_idx) = r_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 1) = g_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 2) = b_int;
-                                *self.rgba_buffer.get_unchecked_mut(p_idx + 3) = 255;
+                                *self.rgba_buffer.get_unchecked_mut(p_idx) = pixel;
                             }
                         }
                     }
@@ -119,4 +111,5 @@ impl Visualizer {
             }
         }
     }
+
 }

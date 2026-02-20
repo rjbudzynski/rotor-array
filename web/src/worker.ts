@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 import init, {
   WasmSimulationEngine,
   WasmVisualizer,
@@ -17,7 +18,9 @@ let engine: WasmSimulationEngine | null = null;
 let visualizer: WasmVisualizer | null = null;
 let wasmExports: WasmExports | null = null;
 let currentLSide = 0;
+let currentUpsample = 1;
 const canUseOffscreenCanvas = typeof OffscreenCanvas !== "undefined";
+
 let offscreenCanvas: OffscreenCanvas | null = null;
 let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null;
 let offscreenSize = 0;
@@ -32,6 +35,7 @@ let initialEnergyPerNode = 0;
 let showArrows = true;
 
 let initPromise: Promise<WasmExports> | null = null;
+
 let rendering = false;
 
 function ensureInit(): Promise<WasmExports> {
@@ -44,6 +48,10 @@ function ensureInit(): Promise<WasmExports> {
   }
   return initPromise;
 }
+
+self.onerror = (e) => {
+  console.error("[RotorArrayWorker] Unhandled error:", e);
+};
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -66,9 +74,17 @@ self.onmessage = async (e) => {
         showArrows: showArrowsPayload,
       } = payload;
       currentLSide = lSide;
+      currentUpsample = upsample;
       engine = new WasmSimulationEngine(lSide, jCoupling, mField);
+
       engine.set_state(theta, omega, 0);
-      visualizer = new WasmVisualizer(lSide, upsample);
+
+      if (!visualizer) {
+        visualizer = new WasmVisualizer(lSide, upsample);
+      } else {
+        visualizer.set_dimensions(lSide, upsample);
+      }
+
       if (typeof showArrowsPayload === "boolean") {
         showArrows = showArrowsPayload;
       }
@@ -107,12 +123,29 @@ self.onmessage = async (e) => {
         showArrows = payload.showArrows;
       }
       break;
+
+    case "returnBuffers":
+      if (payload.theta instanceof ArrayBuffer) {
+        thetaPool.push(payload.theta);
+      }
+      break;
+
+    case "requestFrame":
+      renderFrame();
+      break;
+
+    case "updateUpsample":
+      if (typeof payload.upsample === "number") {
+        currentUpsample = payload.upsample;
+        visualizer?.set_dimensions(currentLSide, currentUpsample);
+      }
+      break;
   }
 };
 
 // Reusable buffers to avoid per-frame allocations
-let thetaBuffer: Float64Array | null = null;
-let omegaBuffer: Float64Array | null = null;
+const thetaPool: ArrayBuffer[] = [];
+let thetaBuffer: Float32Array | null = null;
 
 async function renderFrame() {
   if (!engine || !visualizer || !wasmExports) return;
@@ -121,66 +154,76 @@ async function renderFrame() {
 
   try {
     const N = currentLSide * currentLSide;
-    visualizer.update(engine.get_theta_ptr(), engine.get_omega_ptr(), N);
-
     const memory = wasmExports.memory.buffer;
-
-    // Get WASM memory pointers and sizes
-    const rgbaPtr = visualizer.get_rgba_ptr();
-    const rgbaSize = visualizer.get_rgba_size();
     const thetaPtr = engine.get_theta_ptr();
     const omegaPtr = engine.get_omega_ptr();
 
+    let imageBitmap: ImageBitmap | undefined;
+    let canvasSize = 0;
+
+    // Generate visualization
+    visualizer.update(thetaPtr, omegaPtr, N);
+
+    // Get WASM memory pointers and sizes for pixel data
+    const rgbaPtr = visualizer.get_rgba_ptr();
+    const rgbaSize = visualizer.get_rgba_size();
+
     // Create ImageData from WASM memory (zero-copy view)
     const rgbaView = new Uint8ClampedArray(memory, rgbaPtr, rgbaSize);
-    const canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
+    canvasSize = Math.sqrt(rgbaSize / 4); // RGBA = 4 bytes per pixel
     const imageData = new ImageData(rgbaView, canvasSize, canvasSize);
 
     // Create ImageBitmap for efficient transfer to main thread
-    let imageBitmap: ImageBitmap;
-    if (canUseOffscreenCanvas) {
-      if (!offscreenCanvas || offscreenSize !== canvasSize) {
-        offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
-        offscreenCtx = offscreenCanvas.getContext("2d");
-        offscreenSize = canvasSize;
-      }
-      if (offscreenCanvas && offscreenCtx) {
-        offscreenCtx.putImageData(imageData, 0, 0);
-        imageBitmap = offscreenCanvas.transferToImageBitmap();
-      } else {
-        imageBitmap = await createImageBitmap(imageData);
-      }
-    } else {
+    try {
+      // Direct creation from ImageData is usually well-optimized
       imageBitmap = await createImageBitmap(imageData);
+    } catch (err) {
+      console.error("Failed to create ImageBitmap from ImageData:", err);
+      // Fallback: try using OffscreenCanvas if available
+      if (canUseOffscreenCanvas) {
+        if (!offscreenCanvas || offscreenSize !== canvasSize) {
+          offscreenCanvas = new OffscreenCanvas(canvasSize, canvasSize);
+          offscreenCtx = offscreenCanvas.getContext("2d");
+          offscreenSize = canvasSize;
+        }
+        if (offscreenCanvas && offscreenCtx) {
+          offscreenCtx.putImageData(imageData, 0, 0);
+          imageBitmap = offscreenCanvas.transferToImageBitmap();
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
     }
-
     if (showArrows) {
-      // Create or resize reusable buffers for theta/omega
-      if (!thetaBuffer || thetaBuffer.length !== N) {
-        thetaBuffer = new Float64Array(N);
-      }
-      if (!omegaBuffer || omegaBuffer.length !== N) {
-        omegaBuffer = new Float64Array(N);
+      if (!thetaBuffer || thetaBuffer.byteLength === 0) {
+        const buf = thetaPool.pop();
+        if (buf && buf.byteLength === N * 4) {
+          thetaBuffer = new Float32Array(buf);
+        } else {
+          thetaBuffer = new Float32Array(N);
+        }
       }
 
-      // Copy theta/omega from WASM memory
+      // Copy only theta for main-thread arrow overlay.
       const thetaView = new Float64Array(memory, thetaPtr, N);
-      const omegaView = new Float64Array(memory, omegaPtr, N);
       thetaBuffer.set(thetaView);
-      omegaBuffer.set(omegaView);
     }
 
+    // deno-lint-ignore no-explicit-any
+    const opArr = (engine as any).get_order_parameter(); // [r, meanCos, meanSin] — single pass
     const op = {
-      r: engine.get_order_parameter_r(),
-      meanCos: engine.get_order_parameter_mean_cos(),
-      meanSin: engine.get_order_parameter_mean_sin(),
+      r: opArr[0],
+      meanCos: opArr[1],
+      meanSin: opArr[2],
       t: engine.get_t(),
     };
 
     // Calculate current upsample for arrow rendering
     const upsample = Math.floor(canvasSize / currentLSide);
 
-    // Transfer ImageBitmap and theta/omega buffers to main thread
+    // Transfer ImageBitmap and optional theta buffer to main thread
     const payload = {
       imageBitmap,
       lSide: currentLSide,
@@ -188,32 +231,30 @@ async function renderFrame() {
       upsample,
       orderParameter: op,
     } as {
-      imageBitmap: ImageBitmap;
+      imageBitmap?: ImageBitmap;
       lSide: number;
       canvasSize: number;
       upsample: number;
       orderParameter: typeof op;
       theta?: ArrayBuffer;
-      omega?: ArrayBuffer;
     };
 
-    const transfer: Transferable[] = [imageBitmap];
-    if (showArrows && thetaBuffer && omegaBuffer) {
-      payload.theta = thetaBuffer.buffer;
-      payload.omega = omegaBuffer.buffer;
-      transfer.push(thetaBuffer.buffer, omegaBuffer.buffer);
+    const transfer: Transferable[] = [];
+    if (imageBitmap) {
+      transfer.push(imageBitmap);
+    }
+    if (showArrows && thetaBuffer) {
+      payload.theta = thetaBuffer.buffer as ArrayBuffer;
+      transfer.push(thetaBuffer.buffer);
     }
 
-    (postMessage as typeof self.postMessage)({
+    self.postMessage({
       type: "frame",
       payload,
     }, transfer);
 
-    // Buffers are now transferred and unusable
-    if (showArrows) {
-      thetaBuffer = null;
-      omegaBuffer = null;
-    }
+    // Buffer is now transferred and unusable - always clear it
+    thetaBuffer = null;
 
     lastEmit = performance.now();
   } finally {

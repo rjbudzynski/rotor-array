@@ -58,7 +58,7 @@ export class MeanDirectionVisualizer {
     wheelCtx.putImageData(imgData, 0, 0);
   }
 
-  update(_r: number, meanCos: number, meanSin: number) {
+  update(r: number, meanCos: number, meanSin: number) {
     this.ensureWheel();
     if (this.wheelCanvas) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -67,18 +67,43 @@ export class MeanDirectionVisualizer {
 
     const size = this.canvas.width;
     const center = size / 2;
-    const radius = center * 0.9;
+    const maxRadius = center * 0.9;
 
-    const vecX = meanSin;
-    const vecY = meanCos;
+    const angle = Math.atan2(meanSin, meanCos);
+    const _arrowLen = r * maxRadius;
 
-    // Draw line from center to center + vec * radius
+    this.ctx.save();
+    this.ctx.translate(center, center);
+    this.ctx.rotate(-angle);
+    this.ctx.scale(maxRadius, maxRadius); // Use maxRadius as the unit scale
+
+    this.ctx.fillStyle = "white";
     this.ctx.strokeStyle = "black";
-    this.ctx.lineWidth = 4;
+    this.ctx.lineWidth = 1.5 / maxRadius; // Maintain thin line after scaling
+
+    // Proportions: Shaft 2/3, Head 1/3 of total length r
+    const totalLen = r;
+    const headLen = totalLen * 0.33;
+    const shaftLen = totalLen - headLen;
+    const shaftWidth = 0.06;
+    const headWidth = 0.24;
+
+    // Draw shaft starting from center (0,0)
     this.ctx.beginPath();
-    this.ctx.moveTo(center, center);
-    this.ctx.lineTo(center + vecX * radius, center + vecY * radius);
+    this.ctx.rect(-shaftWidth / 2, 0, shaftWidth, shaftLen);
+    this.ctx.fill();
     this.ctx.stroke();
+
+    // Draw head ending at r
+    this.ctx.beginPath();
+    this.ctx.moveTo(-headWidth / 2, shaftLen);
+    this.ctx.lineTo(headWidth / 2, shaftLen);
+    this.ctx.lineTo(0, totalLen);
+    this.ctx.closePath();
+    this.ctx.fill();
+    this.ctx.stroke();
+
+    this.ctx.restore();
   }
 }
 
@@ -192,8 +217,9 @@ export class ControlPanel {
     this.jInput = document.createElement("input");
     this.jInput.type = "range";
     this.jInput.min = "0";
-    this.jInput.max = "2000";
-    this.jInput.value = "100"; // 1.0
+    this.jInput.max = "20";
+    this.jInput.step = "0.01";
+    this.jInput.value = "1.00";
     const jG = group("Coupling (J): 1.00", this.jInput);
     this.jLabel = jG.lbl;
     this.container.appendChild(jG.div);
@@ -202,8 +228,9 @@ export class ControlPanel {
     this.mInput = document.createElement("input");
     this.mInput.type = "range";
     this.mInput.min = "0";
-    this.mInput.max = "1000";
-    this.mInput.value = "0";
+    this.mInput.max = "10";
+    this.mInput.step = "0.01";
+    this.mInput.value = "0.00";
     const mG = group("Field (M): 0.00", this.mInput);
     this.mLabel = mG.lbl;
     this.container.appendChild(mG.div);
@@ -211,9 +238,10 @@ export class ControlPanel {
     // Time Scale
     this.timeInput = document.createElement("input");
     this.timeInput.type = "range";
-    this.timeInput.min = "10";
-    this.timeInput.max = "500";
-    this.timeInput.value = "100"; // 1.0
+    this.timeInput.min = "0.1";
+    this.timeInput.max = "5";
+    this.timeInput.step = "0.1";
+    this.timeInput.value = "1.0";
     const timeG = group("Time Scale: 1.0x", this.timeInput);
     this.timeLabel = timeG.lbl;
     this.container.appendChild(timeG.div);
@@ -222,8 +250,9 @@ export class ControlPanel {
     this.tempInput = document.createElement("input");
     this.tempInput.type = "range";
     this.tempInput.min = "0";
-    this.tempInput.max = "200";
-    this.tempInput.value = "0";
+    this.tempInput.max = "2";
+    this.tempInput.step = "0.01";
+    this.tempInput.value = "0.00";
     const tempG = group("Initial Temp (T): 0.00", this.tempInput);
     this.tempLabel = tempG.lbl;
     this.container.appendChild(tempG.div);
@@ -257,25 +286,25 @@ export class ControlPanel {
     this.lInput.addEventListener("change", () => this.updatePresetUI()); // Defaults might depend on L
 
     this.jInput.addEventListener("input", () => {
-      const val = parseFloat(this.jInput.value) / 100;
+      const val = parseFloat(this.jInput.value);
       this.jLabel.textContent = `Coupling (J): ${val.toFixed(2)}`;
       this.emitParamChange();
     });
 
     this.mInput.addEventListener("input", () => {
-      const val = parseFloat(this.mInput.value) / 100;
+      const val = parseFloat(this.mInput.value);
       this.mLabel.textContent = `Field (M): ${val.toFixed(2)}`;
       this.emitParamChange();
     });
 
     this.timeInput.addEventListener("input", () => {
-      const val = parseFloat(this.timeInput.value) / 100;
+      const val = parseFloat(this.timeInput.value);
       this.timeLabel.textContent = `Time Scale: ${val.toFixed(1)}x`;
       this.emitParamChange();
     });
 
     this.tempInput.addEventListener("input", () => {
-      const val = parseFloat(this.tempInput.value) / 100;
+      const val = parseFloat(this.tempInput.value);
       this.tempLabel.textContent = `Initial Temp (T): ${val.toFixed(2)}`;
     });
 
@@ -371,9 +400,9 @@ export class ControlPanel {
 
   emitParamChange() {
     if (this.onParamChange) {
-      const j = parseFloat(this.jInput.value) / 100;
-      const m = parseFloat(this.mInput.value) / 100;
-      const t = parseFloat(this.timeInput.value) / 100;
+      const j = parseFloat(this.jInput.value);
+      const m = parseFloat(this.mInput.value);
+      const t = parseFloat(this.timeInput.value);
       this.onParamChange(j, m, t);
     }
   }
@@ -392,7 +421,7 @@ export class ControlPanel {
       const k = parseFloat(this.kInput.value);
       const p2 = parseFloat(this.p2Input.value);
       const p3 = parseFloat(this.p3Input.value);
-      const temp = parseFloat(this.tempInput.value) / 100;
+      const temp = parseFloat(this.tempInput.value);
       this.onReset(name, k, p2, p3, temp);
     }
   }
@@ -402,6 +431,7 @@ export class OrderPlot {
   uplot: {
     setData: (data: [number[], number[]]) => void;
     setScale: (key: string, opts: { min: number; max: number }) => void;
+    setSize: (size: { width: number; height: number }) => void;
   };
   data: [number[], number[]];
   private windowSeconds = PLOT_WINDOW_SECONDS;
@@ -416,6 +446,7 @@ export class OrderPlot {
     ) => {
       setData: (data: [number[], number[]]) => void;
       setScale: (key: string, opts: { min: number; max: number }) => void;
+      setSize: (size: { width: number; height: number }) => void;
     } = uPlot as // deno-lint-ignore no-explicit-any
     any,
   ) {
@@ -424,8 +455,8 @@ export class OrderPlot {
     this.data = [[], []]; // time, r
 
     const opts = {
-      width: el?.clientWidth || 300,
-      height: 150,
+      width: el.clientWidth,
+      height: el.clientHeight || 150,
       cursor: { show: false },
       legend: { show: false },
       padding: [8, 12, 12, 2],
@@ -448,6 +479,17 @@ export class OrderPlot {
     };
 
     this.uplot = new uplotCtor(opts, this.data, el);
+
+    // Watch for size changes
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          this.uplot.setSize({ width, height });
+        }
+      }
+    });
+    observer.observe(el);
   }
 
   push(t: number, r: number) {
