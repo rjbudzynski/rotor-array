@@ -427,11 +427,11 @@ export class ControlPanel {
 
 export class OrderPlot {
   uplot: {
-    setData: (data: [number[], number[]]) => void;
+    setData: (data: [number[], (number | null)[], (number | null)[]]) => void;
     setScale: (key: string, opts: { min: number; max: number }) => void;
     setSize: (size: { width: number; height: number }) => void;
   };
-  data: [number[], number[]];
+  data: [number[], (number | null)[], (number | null)[]];
   private windowSeconds = PLOT_WINDOW_SECONDS;
   private startIdx = 0; // Tracks first valid element (avoids O(n²) shift)
 
@@ -439,10 +439,10 @@ export class OrderPlot {
     containerId: string,
     uplotCtor: new (
       opts: unknown,
-      data: [number[], number[]],
+      data: [number[], (number | null)[], (number | null)[]],
       el: HTMLElement,
     ) => {
-      setData: (data: [number[], number[]]) => void;
+      setData: (data: [number[], (number | null)[], (number | null)[]]) => void;
       setScale: (key: string, opts: { min: number; max: number }) => void;
       setSize: (size: { width: number; height: number }) => void;
     } = uPlot as // deno-lint-ignore no-explicit-any
@@ -450,49 +450,91 @@ export class OrderPlot {
   ) {
     const el = document.getElementById(containerId);
     if (!el) throw new Error("Plot container not found");
-    this.data = [[], []]; // time, r
+    
+    // Create header for labels
+    const header = document.createElement("div");
+    header.className = "plot-header";
+    header.innerHTML = `
+      <span class="plot-label" style="color: yellow; float: left;">Order Parameter (r)</span>
+      <span class="plot-label" style="color: #00f2ff; float: right;">Mean Kinetic Energy</span>
+      <div style="clear: both;"></div>
+    `;
+    // Insert before the chart element or as first child if empty
+    if (el.firstChild) {
+      el.insertBefore(header, el.firstChild);
+    } else {
+      el.appendChild(header);
+    }
+
+    const chartDiv = document.createElement("div");
+    chartDiv.id = "uplot-internal";
+    el.appendChild(chartDiv);
+
+    this.data = [[], [], []]; // time, r, mke
 
     const opts = {
       width: el.clientWidth,
-      height: el.clientHeight || 150,
+      height: (el.clientHeight || 150) - 20, // Subtract header height
       cursor: { show: false },
       legend: { show: false },
-      padding: [8, 12, 12, 2],
+      padding: [8, 4, 12, 2],
       series: [
         {},
         {
           stroke: "yellow",
           width: 2,
           label: "Order Parameter (r)",
+          scale: "y",
+        },
+        {
+          stroke: "#00f2ff",
+          width: 2,
+          label: "Mean Kinetic Energy",
+          scale: "mke",
         },
       ],
       scales: {
         x: { time: false },
         y: { range: [0, 1.1] },
+        mke: {
+          auto: true,
+          range: (_self: any, _min: number, max: number) => [
+            0,
+            Math.max(0.1, max * 1.1),
+          ],
+        },
       },
       axes: [
         { stroke: "#ccc", grid: { stroke: "#333" }, size: 25 },
-        { stroke: "#ccc", grid: { stroke: "#333" }, size: 30 },
+        { stroke: "yellow", grid: { stroke: "#333" }, size: 30 },
+        {
+          stroke: "#00f2ff",
+          grid: { show: false },
+          side: 1, // Right side
+          size: 40,
+          scale: "mke",
+        },
       ],
     };
 
-    this.uplot = new uplotCtor(opts, this.data, el);
+    this.uplot = new uplotCtor(opts, this.data, chartDiv);
 
     // Watch for size changes
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0) {
-          this.uplot.setSize({ width, height });
+          this.uplot.setSize({ width, height: height - 20 });
         }
       }
     });
     observer.observe(el);
   }
 
-  push(t: number, r: number) {
+  push(t: number, r: number, mke: number) {
     this.data[0].push(t);
     this.data[1].push(r);
+    this.data[2].push(mke);
 
     // Prune data older than windowSeconds (O(n) using index tracking)
     const cutoff = t - this.windowSeconds;
@@ -509,6 +551,7 @@ export class OrderPlot {
     ) {
       this.data[0].splice(0, this.startIdx);
       this.data[1].splice(0, this.startIdx);
+      this.data[2].splice(0, this.startIdx);
       this.startIdx = 0;
     }
 
@@ -524,7 +567,7 @@ export class OrderPlot {
   }
 
   reset() {
-    this.data = [[], []];
+    this.data = [[], [], []];
     this.startIdx = 0;
     this.uplot.setData(this.data);
     this.uplot.setScale("x", { min: 0, max: this.windowSeconds });
