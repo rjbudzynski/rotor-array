@@ -148,6 +148,9 @@ class App {
       this.controls.tempInput,
       this.controls.lInput,
       this.controls.presetSelect,
+      this.controls.kInput,
+      this.controls.p2Input,
+      this.controls.p3Input,
       this.controls.arrowCheck,
     ];
     inputs.forEach((input) =>
@@ -353,6 +356,9 @@ class App {
       const params = {
         lSide: this.controls.lInput.value,
         preset: this.controls.presetSelect.value,
+        k: this.controls.kInput.value,
+        p2: this.controls.p2Input.value,
+        p3: this.controls.p3Input.value,
         j: this.controls.jInput.value,
         m: this.controls.mInput.value,
         timeScale: this.controls.timeInput.value,
@@ -373,6 +379,14 @@ class App {
 
         const preset = getStoredString(params, "preset");
         if (preset !== undefined) this.controls.presetSelect.value = preset;
+
+        // Load preset-specific parameters
+        const k = getStoredString(params, "k");
+        if (k !== undefined) this.controls.kInput.value = k;
+        const p2 = getStoredString(params, "p2");
+        if (p2 !== undefined) this.controls.p2Input.value = p2;
+        const p3 = getStoredString(params, "p3");
+        if (p3 !== undefined) this.controls.p3Input.value = p3;
 
         const j = getStoredNumberWithLegacyScaling(params, "j", 20);
         if (j !== undefined) {

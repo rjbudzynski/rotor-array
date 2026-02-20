@@ -46,3 +46,15 @@ Deno.test("stored value helpers handle missing and typed values safely", () => {
   assertEquals(getStoredBoolean(params, "showArrows"), true);
   assertEquals(getStoredBoolean(params, "missing"), undefined);
 });
+
+Deno.test("preset-specific parameters k, p2, p3 are correctly retrieved", () => {
+  const params = {
+    k: "1.5",
+    p2: "10",
+    p3: "-0.5",
+  };
+
+  assertEquals(getStoredString(params, "k"), "1.5");
+  assertEquals(getStoredString(params, "p2"), "10");
+  assertEquals(getStoredString(params, "p3"), "-0.5");
+});

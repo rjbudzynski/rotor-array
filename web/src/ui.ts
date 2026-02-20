@@ -150,6 +150,7 @@ export class ControlPanel {
   resetBtn!: HTMLButtonElement;
 
   isRunning: boolean = false;
+  private currentPreset: string = "";
 
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
@@ -336,13 +337,6 @@ export class ControlPanel {
     }
     this.kLabel.textContent = p.kLabel || "Parameter:";
     this.kInput.step = p.kStep.toString();
-    // Set default if not set? Or keep current if reasonable?
-    // Better to set default when preset changes.
-    // But change event fires on user interaction.
-    // We'll reset values on preset change.
-
-    // To avoid resetting when L changes (unless necessary), we track current preset.
-    // For simplicity, just update constraints.
 
     // P2
     if (p.p2Label) {
@@ -362,7 +356,12 @@ export class ControlPanel {
       if (this.p3Container.style) this.p3Container.style.display = "none";
     }
 
-    this.loadPresetDefaults();
+    // Only load defaults if the preset itself changed.
+    // This prevents overwriting loaded values on init or manual changes when L changes.
+    if (name !== this.currentPreset) {
+      this.loadPresetDefaults();
+      this.currentPreset = name;
+    }
   }
 
   loadPresetDefaults() {
