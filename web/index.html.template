@@ -98,9 +98,10 @@
                 <ul>
                     <li><strong>Start/Stop</strong>: Runs or pauses the integration.</li>
                     <li><strong>Apply</strong>: Applies current settings and restarts the simulation.</li>
-                    <li><strong>Order Parameter Plot</strong>: Shows the history of system synchronization.</li>
-                    <li><strong>Mean Direction</strong>: Shows the current average rotor direction.</li>
-                    <li><strong>Energy (per rotor)</strong> and <strong>dE/E0</strong>: Track energy and relative drift.</li>
+                    <li><strong>Order Parameter Plot</strong>: Dual-axis chart showing system synchronization (yellow, left axis) and mean kinetic energy (cyan, right axis) over the last 10 seconds.</li>
+                    <li><strong>Mean Direction</strong>: Shows the current average rotor direction as a vector on a color wheel.</li>
+                    <li><strong>Energy (per rotor)</strong>: Current Hamiltonian energy divided by number of rotors.</li>
+                    <li><strong>dE/E0</strong>: Relative energy drift from initial value (measures numerical stability).</li>
                 </ul>
 
                 <h3>Visualization</h3>
