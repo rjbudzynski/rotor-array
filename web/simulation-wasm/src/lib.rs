@@ -55,13 +55,14 @@ impl WasmSimulationEngine {
         self.engine.get_energy()
     }
 
-    /// Returns [r, mean_cos, mean_sin] in a single pass over the lattice.
+    /// Returns [r, mean_cos, mean_sin, mean_omega_sq] in a single pass over the lattice.
     pub fn get_order_parameter(&self) -> Float64Array {
-        let (r, mean_cos, mean_sin) = self.engine.get_order_parameter();
-        let arr = Float64Array::new_with_length(3);
+        let (r, mean_cos, mean_sin, mean_omega_sq) = self.engine.get_order_parameter();
+        let arr = Float64Array::new_with_length(4);
         arr.set_index(0, r);
         arr.set_index(1, mean_cos);
         arr.set_index(2, mean_sin);
+        arr.set_index(3, mean_omega_sq);
         arr
     }
 }

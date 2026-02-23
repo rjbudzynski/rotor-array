@@ -99,24 +99,19 @@ Deno.test("OrderPlot prunes data and sets scale for sliding window", () => {
 
   // 2. Push data within first 10s
   for (let i = 0; i <= 5; i++) {
-    plot.push(i, i * 0.1);
+    plot.push(i, i * 0.1, i * 0.5);
   }
   assertEquals(plot.data[0].length, 6);
+  assertEquals(plot.data[1].length, 6);
+  assertEquals(plot.data[2].length, 6);
   assertEquals(plot.data[0][0], 0);
   assertEquals(plot.data[0][5], 5);
   assertEquals(lastScale, { min: 0, max: 10 });
 
   // 3. Push data crossing 10s
-  plot.push(15, 0.5);
+  plot.push(15, 0.5, 2.5);
   // cutoff = 15 - 10 = 5. Data [0, 1, 2, 3, 4, 5, 15].
-  // Pruning logic: while (this.data[0][0] < cutoff) shift().
-  // 0 < 5 (true) -> shift
-  // 1 < 5 (true) -> shift
-  // 2 < 5 (true) -> shift
-  // 3 < 5 (true) -> shift
-  // 4 < 5 (true) -> shift
-  // 5 < 5 (false) -> stop
-  // Remaining: [5, 15]
+  // Remaining: [5, 15] after compaction/pruning
   assertEquals(plot.data[0].length, 2);
   assertEquals(plot.data[0][0], 5);
   assertEquals(plot.data[0][1], 15);

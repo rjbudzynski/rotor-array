@@ -281,17 +281,20 @@ impl SimulationEngine {
         self.array.hamiltonian(&self.theta, &self.omega)
     }
 
-    pub fn get_order_parameter(&self) -> (f64, f64, f64) {
+    pub fn get_order_parameter(&self) -> (f64, f64, f64, f64) {
         let n = self.theta.len();
         let mut sum_cos = 0.0;
         let mut sum_sin = 0.0;
-        for &th in &self.theta {
-            sum_cos += self.array.lut.cos(th);
-            sum_sin += self.array.lut.sin(th);
+        let mut sum_omega_sq = 0.0;
+        for i in 0..n {
+            sum_cos += self.array.lut.cos(self.theta[i]);
+            sum_sin += self.array.lut.sin(self.theta[i]);
+            sum_omega_sq += self.omega[i] * self.omega[i];
         }
         let mean_cos = sum_cos / n as f64;
         let mean_sin = sum_sin / n as f64;
+        let mean_omega_sq = sum_omega_sq / n as f64;
         let r = (mean_cos * mean_cos + mean_sin * mean_sin).sqrt();
-        (r, mean_cos, mean_sin)
+        (r, mean_cos, mean_sin, mean_omega_sq)
     }
 }

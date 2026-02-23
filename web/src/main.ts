@@ -231,7 +231,11 @@ class App {
       const now = performance.now();
       if (now - this.lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
         try {
-          this.plot.push(orderParameter.t, orderParameter.r);
+          this.plot.push(
+            orderParameter.t,
+            orderParameter.r,
+            orderParameter.meanOmegaSq,
+          );
           this.mdViz.update(
             orderParameter.r,
             orderParameter.meanCos,

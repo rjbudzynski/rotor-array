@@ -3,8 +3,8 @@ from typing import Any, cast
 import numpy as np
 import pyqtgraph as pg
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtOpenGL import QOpenGLShader, QOpenGLShaderProgram
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 
 from colors import hsv_to_rgb_array, omega_to_value, theta_to_hue
 

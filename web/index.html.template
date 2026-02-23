@@ -41,7 +41,6 @@
             </div>
             
             <div class="control-group">
-                <label>Order Parameter (r)</label>
                 <div id="uplot-chart"></div>
             </div>
 

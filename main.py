@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 from collections import deque
-from typing import Optional
 
 import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -135,7 +134,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
     def showEvent(  # type: ignore[invalid-method-override] # noqa: N802
-        self, event: Optional[QtGui.QShowEvent]
+        self, event: QtGui.QShowEvent | None
     ) -> None:
         super().showEvent(event)
         # Re-sync the visualizer once layout is likely stable

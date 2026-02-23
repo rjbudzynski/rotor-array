@@ -212,11 +212,12 @@ async function renderFrame() {
     }
 
     // deno-lint-ignore no-explicit-any
-    const opArr = (engine as any).get_order_parameter(); // [r, meanCos, meanSin] — single pass
+    const opArr = (engine as any).get_order_parameter(); // [r, meanCos, meanSin, meanOmegaSq] — single pass
     const op = {
       r: opArr[0],
       meanCos: opArr[1],
       meanSin: opArr[2],
+      meanOmegaSq: opArr[3],
       t: engine.get_t(),
     };
 

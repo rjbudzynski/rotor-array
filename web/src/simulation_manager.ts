@@ -8,6 +8,7 @@ export interface FramePayload {
     r: number;
     meanCos: number;
     meanSin: number;
+    meanOmegaSq: number;
     t: number;
   };
   lSide: number;

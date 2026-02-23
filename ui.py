@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import numpy as np
 import pyqtgraph as pg
@@ -153,7 +153,7 @@ class ColorBarVisualizer(QtWidgets.QWidget):
             self.color_func = color_func
 
         def paintEvent(  # type: ignore[invalid-method-override] # noqa: N802
-            self, event: Optional[QtGui.QPaintEvent]
+            self, event: QtGui.QPaintEvent | None
         ) -> None:
             painter = QtGui.QPainter(self)
             width = self.width()
