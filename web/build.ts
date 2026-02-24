@@ -72,7 +72,7 @@ async function buildHtml() {
   html = html.replace("{{YEAR}}", year);
   html = html.replace("{{OWNER}}", owner);
   html = html.replace("{{DATE}}", dateStr);
-  html = html.replace("{{HASH}}", hash);
+  html = html.replaceAll("{{HASH}}", hash);
 
   await Deno.writeTextFile("public/index.html", minifyHtml(html));
   console.log("HTML generated.");
