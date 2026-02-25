@@ -35,9 +35,15 @@ async function benchmark(L: number) {
 }
 
 const sizes = [200, 300, 400, 500, 600];
-console.log("Rotor Array WASM Performance Benchmark\n");
 
-for (const L of sizes) {
-    await benchmark(L);
-    console.log("");
+async function main() {
+    console.log("Rotor Array WASM Performance Benchmark\n");
+    for (const L of sizes) {
+        await benchmark(L);
+        console.log("");
+    }
+}
+
+if (import.meta.main) {
+    await main();
 }

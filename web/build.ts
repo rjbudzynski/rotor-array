@@ -118,9 +118,12 @@ const ctx = await esbuild.context({
     ...denoPlugins(),
     {
       name: "wasm-and-html",
-      setup(build) {
+      setup(build: esbuild.PluginBuild) {
         build.onStart(async () => {
-          await runWasmPack();
+          const success = await runWasmPack();
+          if (!success) {
+            throw new Error("wasm-pack build failed; aborting bundling.");
+          }
         });
         build.onEnd(async () => {
           await buildHtml();
