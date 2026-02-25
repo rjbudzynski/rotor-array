@@ -3,7 +3,6 @@
 export interface FramePayload {
   imageBitmap?: ImageBitmap;
   theta?: ArrayBuffer;
-  omega?: ArrayBuffer;
   orderParameter: {
     r: number;
     meanCos: number;
@@ -111,19 +110,15 @@ export class SimulationManager {
     });
   }
 
-  public returnBuffers(theta?: ArrayBuffer, omega?: ArrayBuffer) {
+  public returnBuffers(theta?: ArrayBuffer) {
     const transfer: Transferable[] = [];
-    const payload: { theta?: ArrayBuffer; omega?: ArrayBuffer } = {};
+    const payload: { theta?: ArrayBuffer } = {};
 
     // Only return buffers that are valid (have content and haven't been detached)
     // Detached buffers have byteLength === 0 after being transferred
     if (theta && theta.byteLength > 0) {
       payload.theta = theta;
       transfer.push(theta);
-    }
-    if (omega && omega.byteLength > 0) {
-      payload.omega = omega;
-      transfer.push(omega);
     }
 
     if (transfer.length > 0) {

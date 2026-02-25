@@ -537,19 +537,25 @@ export class OrderPlot {
   }
 
   push(t: number, r: number, mke: number) {
-    this.data[0].push(t);
-    this.data[1].push(r);
-    this.data[2].push(mke);
+    this.pushBatch([{ t, r, mke }]);
+  }
 
-    // Prune data older than windowSeconds (O(n) using index tracking)
+  pushBatch(points: Array<{ t: number; r: number; mke: number }>) {
+    if (points.length === 0) return;
+
+    for (const point of points) {
+      this.data[0].push(point.t);
+      this.data[1].push(point.r);
+      this.data[2].push(point.mke);
+    }
+
+    const t = points[points.length - 1].t;
     const cutoff = t - this.windowSeconds;
     const times = this.data[0];
-    // Advance startIdx past expired elements
     while (this.startIdx < times.length && times[this.startIdx] < cutoff) {
       this.startIdx++;
     }
 
-    // Compact arrays when too much dead space accumulates
     if (
       this.startIdx > MAX_DEAD_ELEMENTS ||
       this.startIdx > times.length * COMPACTION_WASTE_THRESHOLD
@@ -560,10 +566,8 @@ export class OrderPlot {
       this.startIdx = 0;
     }
 
-    // Pass full arrays to uPlot and rely on scale to window view
     this.uplot.setData(this.data);
 
-    // Sliding window logic: [0, windowSeconds] or [t-windowSeconds, t]
     if (t > this.windowSeconds) {
       this.uplot.setScale("x", { min: t - this.windowSeconds, max: t });
     } else {

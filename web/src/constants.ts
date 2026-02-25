@@ -38,6 +38,12 @@ export const FRAME_EMIT_INTERVAL_MS = 16.6;
 export const UI_UPDATE_INTERVAL_MS = 100;
 
 /**
+ * Plot flush interval in milliseconds.
+ * @remarks Batches chart points and updates uPlot at 10 Hz
+ */
+export const PLOT_UPDATE_INTERVAL_MS = 100;
+
+/**
  * Default plot window duration in seconds.
  */
 export const PLOT_WINDOW_SECONDS = 10;

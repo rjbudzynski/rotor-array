@@ -8,6 +8,7 @@ import { generateInitialState } from "./presets.ts";
 import {
   CANVAS_PADDING,
   DEFAULT_LATTICE_SIZE,
+  PLOT_UPDATE_INTERVAL_MS,
   UI_UPDATE_INTERVAL_MS,
 } from "./constants.ts";
 import { FramePayload, SimulationManager } from "./simulation_manager.ts";
@@ -42,7 +43,9 @@ class App {
   private energyRelDevEl = document.getElementById("energy-rel-dev-value");
 
   private lastUiUpdate = 0;
+  private lastPlotFlush = 0;
   private displaySize = 0;
+  private pendingPlotPoints: Array<{ t: number; r: number; mke: number }> = [];
 
   constructor() {
     this.simManager = new SimulationManager();
@@ -174,7 +177,6 @@ class App {
       const {
         imageBitmap,
         theta: thetaBuf,
-        omega: omegaBuf,
         orderParameter,
         lSide,
         canvasSize,
@@ -232,16 +234,24 @@ class App {
       }
 
       // Return buffers to worker for recycling after all rendering is done
-      this.simManager.returnBuffers(thetaBuf, omegaBuf);
+      this.simManager.returnBuffers(thetaBuf);
 
       const now = performance.now();
       if (now - this.lastUiUpdate > UI_UPDATE_INTERVAL_MS) {
         try {
-          this.plot.push(
-            orderParameter.t,
-            orderParameter.r,
-            orderParameter.meanOmegaSq,
-          );
+          this.pendingPlotPoints.push({
+            t: orderParameter.t,
+            r: orderParameter.r,
+            mke: orderParameter.meanOmegaSq,
+          });
+          if (
+            now - this.lastPlotFlush >= PLOT_UPDATE_INTERVAL_MS &&
+            this.pendingPlotPoints.length > 0
+          ) {
+            this.plot.pushBatch(this.pendingPlotPoints);
+            this.pendingPlotPoints = [];
+            this.lastPlotFlush = now;
+          }
           this.mdViz.update(
             orderParameter.r,
             orderParameter.meanCos,
@@ -292,6 +302,8 @@ class App {
     });
 
     this.plot.reset();
+    this.pendingPlotPoints = [];
+    this.lastPlotFlush = 0;
     this.controls.isRunning = false;
     this.controls.startBtn.textContent = "Start";
     this.controls.startBtn.classList.remove("active");
