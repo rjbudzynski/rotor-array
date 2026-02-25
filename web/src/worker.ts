@@ -265,14 +265,21 @@ async function renderFrame() {
   }
 }
 
-// MessageChannel for tighter scheduling (bypasses setTimeout 4ms minimum)
-const scheduleChannel = new MessageChannel();
-scheduleChannel.port2.onmessage = () => {
-  if (running) {
-    loop();
+let scheduledLoop: number | null = null;
+
+function scheduleNext(delayMs: number) {
+  if (!running) return;
+  if (scheduledLoop !== null) {
+    clearTimeout(scheduledLoop);
   }
-};
-const scheduleNext = () => scheduleChannel.port1.postMessage(null);
+  const delay = Math.max(1, Math.ceil(delayMs));
+  scheduledLoop = setTimeout(() => {
+    scheduledLoop = null;
+    if (running) {
+      loop();
+    }
+  }, delay);
+}
 
 function loop() {
   if (!running || !engine || !visualizer || !wasmExports) return;
@@ -296,9 +303,17 @@ function loop() {
     emitEnergyStats();
   }
 
-  if (running) {
-    scheduleNext();
-  }
+  if (!running) return;
+
+  // Schedule the next loop when work is expected, instead of hot-spinning.
+  // This reduces CPU/battery usage while keeping physics/render cadence stable.
+  const stepTimeScale = Math.max(timeScale, 1e-6);
+  const simStepRealMs = ((SIMULATION_TIMESTEP - accumulator) / stepTimeScale) * 1000;
+  const untilStepMs = accumulator >= SIMULATION_TIMESTEP
+    ? 1
+    : Math.max(1, simStepRealMs);
+  const untilFrameMs = Math.max(1, FRAME_EMIT_INTERVAL_MS - (now - lastEmit));
+  scheduleNext(Math.min(untilStepMs, untilFrameMs));
 }
 
 function emitEnergyStats() {
