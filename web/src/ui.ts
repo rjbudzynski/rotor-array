@@ -503,7 +503,7 @@ export class OrderPlot {
         y: { range: [0, 1.1] },
         mke: {
           auto: true,
-          range: (_self: any, _min: number, max: number) => [
+          range: (_self: unknown, _min: number, max: number) => [
             0,
             Math.max(0.1, max * 1.1),
           ],
