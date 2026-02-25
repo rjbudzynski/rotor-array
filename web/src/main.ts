@@ -63,6 +63,12 @@ class App {
     this.canvas.height = initialSize;
     this.overlayCanvas.width = initialSize;
     this.overlayCanvas.height = initialSize;
+    
+    // CSS size is 100% of stack (positioned absolutely)
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
+    this.overlayCanvas.style.width = "100%";
+    this.overlayCanvas.style.height = "100%";
 
     this.mdViz = new MeanDirectionVisualizer(this.mdCanvas);
     this.plot = new OrderPlot("uplot-chart");
@@ -187,11 +193,7 @@ class App {
         // Recreate 2D context after resize
         this.ctx2d = this.canvas.getContext("2d");
         
-        // Also set CSS size to match
-        this.canvas.style.width = `${canvasSize}px`;
-        this.canvas.style.height = `${canvasSize}px`;
-        this.overlayCanvas.style.width = `${canvasSize}px`;
-        this.overlayCanvas.style.height = `${canvasSize}px`;
+        // CSS size is always 100% of stack, no need to update
       }
 
       // Draw ImageBitmap from WASM visualization using drawImage
