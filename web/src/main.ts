@@ -46,6 +46,7 @@ class App {
   private lastPlotFlush = 0;
   private displaySize = 0;
   private pendingPlotPoints: Array<{ t: number; r: number; mke: number }> = [];
+  private overlayHasArrows = false;
 
   constructor() {
     this.simManager = new SimulationManager();
@@ -133,8 +134,18 @@ class App {
       this.handleReset(preset, k, p2, p3, temp);
     this.controls.onParamChange = (j, m, t) =>
       this.simManager.updateParams(j, m, t);
-    this.controls.onArrowChange = (show) =>
+    this.controls.onArrowChange = (show) => {
       this.simManager.setRenderOptions(show);
+      if (!show && this.overlayHasArrows) {
+        this.overlayCtx.clearRect(
+          0,
+          0,
+          this.overlayCanvas.width,
+          this.overlayCanvas.height,
+        );
+        this.overlayHasArrows = false;
+      }
+    };
     this.controls.onStartStop = (running) =>
       running ? this.simManager.start() : this.simManager.stop();
 
@@ -206,18 +217,16 @@ class App {
         imageBitmap.close();
       }
 
-      this.overlayCtx.clearRect(
-        0,
-        0,
-        this.overlayCanvas.width,
-        this.overlayCanvas.height,
-      );
+      const arrowsEnabled = this.controls.arrowCheck.checked && thetaBuf &&
+        upsample >= 4 && lSide <= 60;
 
-      // Draw arrows if enabled and disks are large enough
-      if (
-        this.controls.arrowCheck.checked && thetaBuf && upsample >= 4 &&
-        lSide <= 60
-      ) {
+      if (arrowsEnabled) {
+        this.overlayCtx.clearRect(
+          0,
+          0,
+          this.overlayCanvas.width,
+          this.overlayCanvas.height,
+        );
         try {
           // Check buffer is valid before creating Float32Array
           if (thetaBuf.byteLength > 0) {
@@ -227,10 +236,20 @@ class App {
               lSide,
               upsample,
             );
+            this.overlayHasArrows = true;
           }
         } catch (e) {
           console.error("Error drawing arrows:", e);
         }
+      } else if (this.overlayHasArrows) {
+        // Clear stale arrows once when overlay rendering transitions off.
+        this.overlayCtx.clearRect(
+          0,
+          0,
+          this.overlayCanvas.width,
+          this.overlayCanvas.height,
+        );
+        this.overlayHasArrows = false;
       }
 
       // Return buffers to worker for recycling after all rendering is done

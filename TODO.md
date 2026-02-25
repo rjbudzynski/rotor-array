@@ -13,8 +13,8 @@
 ## Prioritized Work
 
 ### P0 (High impact, lower risk)
-1. Reduce chart update frequency and batch points
-- Lower `uPlot` updates (e.g., 5 Hz) and append batched samples.
+1. [x] Reduce chart update frequency and batch points
+- Implemented: batched samples with `uPlot` flush at 10 Hz.
 - Confirm readability and interaction remain acceptable.
 
 ### P1 (High impact, moderate risk)
@@ -30,9 +30,9 @@
 - Introduce dynamic FPS target (e.g., 60 -> 45 -> 30) when worker falls behind.
 - Keep physics step integrity independent from render cadence.
 
-5. Skip overlay work entirely when arrows are off
-- Avoid per-frame `clearRect`/overlay path when `showArrows === false`.
-- Ensure toggling arrows on/off remains immediate and correct.
+5. [x] Skip overlay work entirely when arrows are off
+- Implemented: skip per-frame overlay clear when arrows are off; clear once on transition.
+- Verified visually: toggling arrows on/off remains immediate and correct.
 
 ### P2 (Targeted micro-optimizations)
 6. Quantize arrow transfer payload
