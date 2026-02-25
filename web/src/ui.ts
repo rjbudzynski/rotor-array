@@ -15,6 +15,11 @@ export class MeanDirectionVisualizer {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
+    // Ensure canvas has dimensions before getting context
+    if (canvas.width === 0 || canvas.height === 0) {
+      canvas.width = 240;
+      canvas.height = 240;
+    }
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) throw new Error("No context");
     this.ctx = ctx;

@@ -9,7 +9,7 @@ import {
   SIMULATION_TIMESTEP,
 } from "./constants.ts";
 
-/** WASM module exports from wasm-bindgen */
+console.log("[Worker] Script loaded");
 interface WasmExports {
   memory: WebAssembly.Memory;
 }
@@ -44,6 +44,9 @@ function ensureInit(): Promise<WasmExports> {
     initPromise = init().then((exports) => {
       wasmExports = exports as WasmExports;
       return wasmExports;
+    }).catch((err) => {
+      console.error("[Worker] WASM init failed:", err);
+      throw err;
     });
   }
   return initPromise;
@@ -175,7 +178,6 @@ async function renderFrame() {
 
     // Create ImageBitmap for efficient transfer to main thread
     try {
-      // Direct creation from ImageData is usually well-optimized
       imageBitmap = await createImageBitmap(imageData);
     } catch (err) {
       console.error("Failed to create ImageBitmap from ImageData:", err);

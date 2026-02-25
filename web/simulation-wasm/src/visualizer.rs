@@ -39,7 +39,7 @@ impl Visualizer {
             self.mask = vec![0; s * s];
             let center = (s as f64 - 1.0) / 2.0;
             let radius = 0.45 * s as f64;
-            
+
             for y in 0..s {
                 for x in 0..s {
                     let dx = x as f64 - center;
@@ -63,8 +63,9 @@ impl Visualizer {
         let l = self.l_side;
         let s = self.upsample;
         let total_w = l * s;
-        
-        self.rgba_buffer.fill(0xFF000000);
+
+        // Fill with transparent black (0x00000000), not opaque black
+        self.rgba_buffer.fill(0x00000000);
 
         let has_mask = !self.mask.is_empty();
 
@@ -73,11 +74,11 @@ impl Visualizer {
             for c in 0..l {
                 let idx = r * l + c;
                 let start_x = c * s;
-                
+
                 let (r_int, g_int, b_int) = unsafe {
                     self.lut.get_rgb(*theta.get_unchecked(idx), *omega.get_unchecked(idx) * *omega.get_unchecked(idx))
                 };
-                
+
                 if has_mask {
                     for my in 0..s {
                         let row_idx = (start_y + my) * total_w;
@@ -87,7 +88,7 @@ impl Visualizer {
                             if alpha == 0 {
                                 continue;
                             }
-                            
+
                             let p_idx = row_idx + (start_x + mx);
                             // Combine RGB and alpha into u32 (Little Endian: AABBGGRR)
                             let pixel = (alpha as u32) << 24 | (b_int as u32) << 16 | (g_int as u32) << 8 | (r_int as u32);

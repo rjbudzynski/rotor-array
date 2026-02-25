@@ -11,13 +11,13 @@
     <div id="app">
         <div id="canvas-container">
             <div id="canvas-stack">
-                <canvas id="sim-canvas" class="sim-layer"></canvas>
-                <canvas id="overlay-canvas" class="sim-layer"></canvas>
+                <canvas id="sim-canvas" class="sim-layer" width="400" height="400"></canvas>
+                <canvas id="overlay-canvas" class="sim-layer" width="400" height="400"></canvas>
             </div>
         </div>
         <div id="sidebar">
             <h1>Rotor Array <button id="help-btn" title="Help">?</button></h1>
-            
+
             <div id="controls-container">
                 <!-- Controls will be injected here -->
             </div>

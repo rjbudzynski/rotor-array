@@ -47,12 +47,22 @@ class App {
   constructor() {
     this.simManager = new SimulationManager();
 
-    this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-    this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+    // Use 2D context directly for better cross-browser compatibility
+    this.bitmapCtx = null;
+    this.ctx2d = this.canvas.getContext("2d");
 
     const overlayCtx = this.overlayCanvas.getContext("2d");
     if (!overlayCtx) throw new Error("Failed to get overlay canvas context");
     this.overlayCtx = overlayCtx;
+
+    // Set initial canvas dimensions
+    const container = document.getElementById("canvas-container");
+    const containerRect = container?.getBoundingClientRect();
+    const initialSize = containerRect ? Math.max(100, Math.min(containerRect.width, containerRect.height)) : 400;
+    this.canvas.width = initialSize;
+    this.canvas.height = initialSize;
+    this.overlayCanvas.width = initialSize;
+    this.overlayCanvas.height = initialSize;
 
     this.mdViz = new MeanDirectionVisualizer(this.mdCanvas);
     this.plot = new OrderPlot("uplot-chart");
@@ -75,11 +85,6 @@ class App {
 
         if (size !== this.displaySize) {
           this.displaySize = size;
-          const stack = document.getElementById("canvas-stack");
-          if (stack) {
-            stack.style.width = `${size}px`;
-            stack.style.height = `${size}px`;
-          }
 
           // Trigger a re-calculation of upsample without full reset
           const lSide = parseInt(this.controls.lInput.value) ||
@@ -179,21 +184,20 @@ class App {
         this.overlayCanvas.width = canvasSize;
         this.overlayCanvas.height = canvasSize;
 
-        // Canvas resize destroys the 2D context - must recreate it
-        this.bitmapCtx = this.canvas.getContext("bitmaprenderer");
-        this.ctx2d = this.bitmapCtx ? null : this.canvas.getContext("2d");
+        // Recreate 2D context after resize
+        this.ctx2d = this.canvas.getContext("2d");
+        
+        // Also set CSS size to match
+        this.canvas.style.width = `${canvasSize}px`;
+        this.canvas.style.height = `${canvasSize}px`;
+        this.overlayCanvas.style.width = `${canvasSize}px`;
+        this.overlayCanvas.style.height = `${canvasSize}px`;
       }
 
-      // Draw ImageBitmap from WASM visualization
+      // Draw ImageBitmap from WASM visualization using drawImage
       if (imageBitmap) {
-        try {
-          if (this.bitmapCtx) {
-            this.bitmapCtx.transferFromImageBitmap(imageBitmap);
-          } else if (this.ctx2d) {
-            this.ctx2d.drawImage(imageBitmap, 0, 0);
-          }
-        } catch (e) {
-          console.error("Error in Canvas2D render:", e);
+        if (this.ctx2d) {
+          this.ctx2d.drawImage(imageBitmap, 0, 0);
         }
         imageBitmap.close();
       }
