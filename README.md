@@ -21,7 +21,9 @@ The equations of motion are:
 
 ## Implementation
 
-- **Core**: Python 3.13 with NumPy and optional **Numba** JIT acceleration for high-performance physics.
+- **Core**: Python 3.13 with NumPy and high-performance physics backends:
+    - **Numba**: JIT-compiled CPU kernels for fast local simulation.
+    - **Taichi**: Cross-platform GPU kernels (Metal, CUDA, Vulkan) for massive lattices.
     - Uses a custom **Velocity Verlet** symplectic integrator with adaptive sub-stepping to maintain $O(10^{-6})$ energy stability.
 - **Visualization**: Dual-path rendering system.
     - **CPU Path**: Pyqtgraph-based display using vectorized alpha-masking.

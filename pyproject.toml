@@ -12,6 +12,7 @@ dependencies = [
     "pytest-cov>=7.0.0",
     "pytest-qt>=4.5.0",
     "scipy>=1.17.0",
+    "taichi>=1.7.4",
 ]
 
 [project.optional-dependencies]

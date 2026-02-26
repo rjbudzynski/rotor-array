@@ -32,7 +32,8 @@ The system consists of $N = L^2$ rotors. Each rotor interacts with its four near
 
 ### Advanced Options
 - **Show Direction Arrows**: Overlays arrows on the rotors for precise orientation tracking (auto-disabled for $L > 60$).
-- **Numba Acceleration**: Uses JIT-compiled kernels for significantly faster physics integration.
+- **Numba Acceleration**: Uses JIT-compiled CPU kernels for significantly faster physics integration.
+- **Taichi (GPU) Physics**: Uses cross-platform GPU-accelerated kernels (Metal/CUDA/Vulkan) for maximum simulation performance on massive lattices.
 - **OpenGL Renderer**: Uses GPU shaders for ultra-high-performance visualization of large lattices.
 
 ## Monitors & Analytics

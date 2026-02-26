@@ -8,6 +8,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from presets import generate_initial_state
 from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
+from taichi_simulation import TAICHI_AVAILABLE, TaichiSimulationEngine
 from ui import ControlPanel, InfoPanel
 from visualizer import OPENGL_AVAILABLE, RotorArrayGLVisualizer, RotorArrayVisualizer
 
@@ -64,6 +65,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.j_coupling = 1.0
         self.m_field = 0.0
         self.use_numba = NUMBA_AVAILABLE
+        self.use_taichi = False
         self.use_opengl = OPENGL_AVAILABLE
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
@@ -91,6 +93,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.l_spin.setValue(self.l_side)
         self.controls.set_numba_enabled(NUMBA_AVAILABLE)
         self.controls.set_numba_checked(self.use_numba and NUMBA_AVAILABLE)
+        self.controls.set_taichi_enabled(TAICHI_AVAILABLE)
+        self.controls.set_taichi_checked(self.use_taichi and TAICHI_AVAILABLE)
         self.controls.set_opengl_enabled(OPENGL_AVAILABLE)
         self.controls.set_opengl_checked(self.use_opengl and OPENGL_AVAILABLE)
         self.main_layout.addWidget(self.controls, stretch=1)
@@ -114,6 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.set_time_callback(self.update_time_scale)
         self.controls.set_arrows_callback(self.toggle_arrows)
         self.controls.set_numba_callback(self.update_numba)
+        self.controls.set_taichi_callback(self.update_taichi)
         self.controls.set_opengl_callback(self.update_opengl)
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
@@ -184,7 +189,11 @@ class MainWindow(QtWidgets.QMainWindow):
         """Re-initialize the simulation with a new lattice size or preset."""
         self.l_side = l_side
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
-        self.engine = SimulationEngine(params, use_numba=self.use_numba)
+        
+        if self.use_taichi and TAICHI_AVAILABLE:
+            self.engine = TaichiSimulationEngine(params)
+        else:
+            self.engine = SimulationEngine(params, use_numba=self.use_numba)
 
         # Reset state based on current preset
         self.y0 = self.get_initial_state()
@@ -228,6 +237,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controls.set_numba_checked(False)
             return
         self.use_numba = enabled
+        if enabled:
+            self.use_taichi = False
+            self.controls.set_taichi_checked(False)
+        self.reinit_simulation(self.l_side)
+
+    def update_taichi(self, enabled: bool):
+        if enabled and not TAICHI_AVAILABLE:
+            self.controls.set_taichi_checked(False)
+            return
+        self.use_taichi = enabled
+        if enabled:
+            self.use_numba = False
+            self.controls.set_numba_checked(False)
         self.reinit_simulation(self.l_side)
 
     def update_opengl(self, enabled: bool):

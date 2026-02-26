@@ -7,7 +7,7 @@ This document provides a summary of the project state and guidance for future AI
 **Rotor Array Simulation** is a Python-based interactive tool for simulating a Hamiltonian system of $L \times L$ coupled planar rotors on a square lattice in a uniform external field.
 
 ### Core Features
-- **High-Fidelity Physics**: Uses a Velocity Verlet symplectic integrator with adaptive sub-stepping for energy conservation. Supports **Numba**-accelerated kernels for large-scale simulation.
+- **High-Fidelity Physics**: Uses a Velocity Verlet symplectic integrator with adaptive sub-stepping for energy conservation. Supports **Numba**-accelerated CPU kernels and **Taichi**-accelerated GPU kernels for massive-scale simulation.
 - **Interactive UI**: Real-time control over coupling strength ($J$), external field ($M$), time scaling, and lattice dimension ($L$).
 - **Dynamic Visualization**:
     - Dual-path rendering: PyQtGraph (CPU) and **OpenGL/Shader** (GPU) for ultra-fast lattice display.
@@ -17,9 +17,9 @@ This document provides a summary of the project state and guidance for future AI
 
 ## Current State
 
-The simulation is a feature-rich 2D square lattice rotor simulation with advanced visualization and performance optimizations.
-- **Completed**: 2D physics engine (CPU/Numba), dual visualizers (CPU/OpenGL), high-fidelity arrow order parameter display, and comprehensive topological presets.
-- **Verification**: Fully tested for energy conservation, UI responsiveness, and cross-renderer consistency.
+The simulation is a feature-rich 2D square lattice rotor simulation with advanced visualization and multiple high-performance physics backends.
+- **Completed**: 2D physics engine (CPU/Numba/GPU-Taichi), dual visualizers (CPU/OpenGL), high-fidelity arrow order parameter display, and comprehensive topological presets.
+- **Verification**: Fully tested for energy conservation, engine consistency, UI responsiveness, and cross-renderer stability.
 
 ## Instructions for Agents
 
