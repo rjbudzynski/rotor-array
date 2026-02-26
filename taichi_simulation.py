@@ -150,11 +150,13 @@ if TAICHI_AVAILABLE:
             for _ in range(self.substeps):
                 # Velocity Verlet step
                 self.array.verlet_step_1(sub_dt)
-                self.array.compute_acceleration()
-                self.array.verlet_step_2(sub_dt)
-            self.t += dt
-
-        def get_energy(self) -> float:
+                            self.array.compute_acceleration()
+                            self.array.verlet_step_2(sub_dt)
+                        self.t += dt
+                        return True
+                
+                    def get_energy(self) -> float:
+                
             self.array.compute_stats()
             return float(self.array.sum_ke[None] + self.array.sum_pe[None])
 
