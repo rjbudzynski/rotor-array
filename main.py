@@ -63,8 +63,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.l_side = l_side
         self.j_coupling = 1.0
         self.m_field = 0.0
-        self.use_numba = False
-        self.use_opengl = False
+        self.use_numba = NUMBA_AVAILABLE
+        self.use_opengl = OPENGL_AVAILABLE
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         self.engine = SimulationEngine(params, use_numba=self.use_numba)
