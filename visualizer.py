@@ -291,6 +291,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
 
 
 if ogl is not None:
+    from ctypes import c_void_p
 
     class RotorArrayGLVisualizer(QOpenGLWidget):
         """
@@ -311,8 +312,9 @@ if ogl is not None:
             self._program: QOpenGLShaderProgram | None = None
             self._vbo = None
             self._vbo_stride = 0
-            self._theta_tex = None
-            self._omega_tex = None
+            self._state_tex = None
+            self._pbos = None
+            self._pbo_idx = 0
             self._tex_l_side: int | None = None
 
         def toggle_arrows(self, show: bool) -> None:
@@ -355,8 +357,7 @@ if ogl is not None:
             fragment_src = """
             #version 120
             varying vec2 v_uv;
-            uniform sampler2D u_theta;
-            uniform sampler2D u_omega;
+            uniform sampler2D u_state;
             uniform float u_L;
             uniform float u_radius;
             uniform float u_edge;
@@ -388,12 +389,11 @@ if ogl is not None:
                     discard;
                 }
                 vec2 sample_uv = (cell + vec2(0.5)) / u_L;
-                float theta = texture2D(u_theta, sample_uv).r;
-                float omega = texture2D(u_omega, sample_uv).r;
-
-                // Decode from [0,1]
-                float theta_val = theta * 6.28318530718 - 3.14159265359;
-                float omega_val = (omega - 0.5) * (2.0 * u_omega_max);
+                
+                // State contains theta in R and omega in G
+                vec2 state = texture2D(u_state, sample_uv).rg;
+                float theta_val = state.r;
+                float omega_val = state.g;
 
                                 // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
                                 float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
@@ -462,30 +462,38 @@ if ogl is not None:
             self._vbo_stride = stride
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, 0)
 
-            self._theta_tex = ogl.glGenTextures(1)
-            self._omega_tex = ogl.glGenTextures(1)
+            self._state_tex = ogl.glGenTextures(1)
+            self._pbos = ogl.glGenBuffers(2)
             self._init_textures()
 
         def _init_textures(self) -> None:
-            if self._theta_tex is None or self._omega_tex is None:
+            if self._state_tex is None:
                 return
-            for tex in (self._theta_tex, self._omega_tex):
-                ogl.glBindTexture(ogl.GL_TEXTURE_2D, tex)
-                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MIN_FILTER, ogl.GL_NEAREST)
-                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MAG_FILTER, ogl.GL_NEAREST)
-                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_S, ogl.GL_CLAMP_TO_EDGE)
-                ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_T, ogl.GL_CLAMP_TO_EDGE)
-                ogl.glTexImage2D(
-                    ogl.GL_TEXTURE_2D,
-                    0,
-                    ogl.GL_RGB,
-                    self.l_side,
-                    self.l_side,
-                    0,
-                    ogl.GL_RGB,
-                    ogl.GL_UNSIGNED_BYTE,
-                    None,
-                )
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
+            ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MIN_FILTER, ogl.GL_NEAREST)
+            ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MAG_FILTER, ogl.GL_NEAREST)
+            ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_S, ogl.GL_CLAMP_TO_EDGE)
+            ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_T, ogl.GL_CLAMP_TO_EDGE)
+            # Use dual-channel (RG) 32-bit float format
+            ogl.glTexImage2D(
+                ogl.GL_TEXTURE_2D,
+                0,
+                ogl.GL_RG32F,
+                self.l_side,
+                self.l_side,
+                0,
+                ogl.GL_RG,
+                ogl.GL_FLOAT,
+                None,
+            )
+
+            # Pre-allocate PBO buffers
+            data_size = self.l_side * self.l_side * 2 * 4  # L * L * 2 channels * 4 bytes
+            for pbo in self._pbos:
+                ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
+                ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_size, None, ogl.GL_STREAM_DRAW)
+            ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, 0)
+
             ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._textures_dirty = True
@@ -501,30 +509,28 @@ if ogl is not None:
             ogl.glViewport(x, y, size, size)
 
         def _upload_textures(self) -> None:
-            if self._theta_tex is None or self._omega_tex is None:
+            if self._state_tex is None or self._pbos is None:
                 return
-            # Pack to 8-bit RGB for broader GL compatibility.
-            # theta in [-pi, pi] -> [0, 255] in R channel
-            theta_norm = (self._theta + np.pi) / (2.0 * np.pi)
-            theta_u8 = np.clip(theta_norm * 255.0, 0.0, 255.0).astype(np.uint8)
-            # omega in [-omega_max, omega_max] -> [0, 255] in R channel
-            omega_max = 8.0
-            omega_norm = (self._omega / (2.0 * omega_max)) + 0.5
-            omega_u8 = np.clip(omega_norm * 255.0, 0.0, 255.0).astype(np.uint8)
 
-            theta_rgb = np.zeros((self.n_rotors, 3), dtype=np.uint8)
-            theta_rgb[:, 0] = theta_u8
-            omega_rgb = np.zeros((self.n_rotors, 3), dtype=np.uint8)
-            omega_rgb[:, 0] = omega_u8
+            # Pack theta (R) and omega (G) into a single dual-channel float32 array
+            state_2d = np.empty((self.l_side, self.l_side, 2), dtype=np.float32)
+            state_2d[..., 0] = self._theta.reshape(self.l_side, self.l_side)
+            state_2d[..., 1] = self._omega.reshape(self.l_side, self.l_side)
+            state_2d = np.ascontiguousarray(state_2d)
 
-            theta_2d = np.ascontiguousarray(
-                theta_rgb.reshape(self.l_side, self.l_side, 3), dtype=np.uint8
-            )
-            omega_2d = np.ascontiguousarray(
-                omega_rgb.reshape(self.l_side, self.l_side, 3), dtype=np.uint8
-            )
+            # Use PBO for asynchronous upload
+            pbo = self._pbos[self._pbo_idx]
+            self._pbo_idx = (self._pbo_idx + 1) % 2
 
-            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
+            ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
+            
+            # Orphan buffer for performance
+            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, state_2d.nbytes, None, ogl.GL_STREAM_DRAW)
+            # Upload data to PBO
+            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, state_2d.nbytes, state_2d, ogl.GL_STREAM_DRAW)
+            
+            # Trigger asynchronous transfer from PBO to texture
             ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
             ogl.glTexSubImage2D(
                 ogl.GL_TEXTURE_2D,
@@ -533,24 +539,12 @@ if ogl is not None:
                 0,
                 self.l_side,
                 self.l_side,
-                ogl.GL_RGB,
-                ogl.GL_UNSIGNED_BYTE,
-                theta_2d,
+                ogl.GL_RG,
+                ogl.GL_FLOAT,
+                c_void_p(0),
             )
-
-            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._omega_tex)
-            ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
-            ogl.glTexSubImage2D(
-                ogl.GL_TEXTURE_2D,
-                0,
-                0,
-                0,
-                self.l_side,
-                self.l_side,
-                ogl.GL_RGB,
-                ogl.GL_UNSIGNED_BYTE,
-                omega_2d,
-            )
+            
+            ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, 0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._textures_dirty = False
 
@@ -585,15 +579,10 @@ if ogl is not None:
             self._program.setUniformValue("u_arrow_thickness", 0.015)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
-            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._theta_tex)
-            self._program.setUniformValue("u_theta", 0)
-
-            ogl.glActiveTexture(ogl.GL_TEXTURE1)
-            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._omega_tex)
-            self._program.setUniformValue("u_omega", 1)
+            ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
+            self._program.setUniformValue("u_state", 0)
 
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, self._vbo)
-            from ctypes import c_void_p
 
             ogl.glEnableVertexAttribArray(0)
             ogl.glVertexAttribPointer(0, 2, ogl.GL_FLOAT, False, self._vbo_stride, c_void_p(0))
