@@ -31,20 +31,103 @@ class HelpDialog(QtWidgets.QDialog):
         layout.addWidget(buttons)
 
 
+class MeanDirectionArrow(pg.GraphicsObject):
+    """
+    A custom graphics item that draws a white arrow with black edges.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.vx = 0.0
+        self.vy = 0.0
+        self.r = 0.0
+
+    def set_vector(self, r: float, vx: float, vy: float) -> None:
+        self.r = r
+        self.vx = vx
+        self.vy = vy
+        self.update()
+
+    def boundingRect(self) -> QtCore.QRectF:
+        return QtCore.QRectF(-1.1, -1.1, 2.2, 2.2)
+
+    def paint(
+        self,
+        painter: QtGui.QPainter,
+        option: QtWidgets.QStyleOptionGraphicsItem,
+        widget: QtWidgets.QWidget | None = None,
+    ) -> None:
+        if self.r < 0.01:
+            return
+
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+
+        # Start and end points
+        start = QtCore.QPointF(0, 0)
+        end = QtCore.QPointF(self.vx, self.vy)
+
+        # Normalize direction for arrow head
+        ux = self.vx / self.r
+        uy = self.vy / self.r
+
+        head_len = 0.15
+        head_width = 0.08
+
+        # Arrow head points
+        p1 = end
+        p2 = QtCore.QPointF(
+            self.vx - head_len * ux + head_width * (-uy),
+            self.vy - head_len * uy + head_width * ux,
+        )
+        p3 = QtCore.QPointF(
+            self.vx - head_len * ux - head_width * (-uy),
+            self.vy - head_len * uy - head_width * ux,
+        )
+
+        path = QtGui.QPainterPath()
+        path.moveTo(start)
+        path.lineTo(end)
+        path.moveTo(p2)
+        path.lineTo(p1)
+        path.lineTo(p3)
+
+        # Draw black outline (thick, cosmetic)
+        pen_black = QtGui.QPen(
+            QtCore.Qt.GlobalColor.black,
+            6,
+            QtCore.Qt.PenStyle.SolidLine,
+            QtCore.Qt.PenCapStyle.RoundCap,
+            QtCore.Qt.PenJoinStyle.RoundJoin,
+        )
+        pen_black.setCosmetic(True)
+        painter.setPen(pen_black)
+        painter.drawPath(path)
+
+        # Draw white core (thin, cosmetic)
+        pen_white = QtGui.QPen(
+            QtCore.Qt.GlobalColor.white,
+            2.5,
+            QtCore.Qt.PenStyle.SolidLine,
+            QtCore.Qt.PenCapStyle.RoundCap,
+            QtCore.Qt.PenJoinStyle.RoundJoin,
+        )
+        pen_white.setCosmetic(True)
+        painter.setPen(pen_white)
+        painter.drawPath(path)
+
+
 class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
     """
-    Visualizes the mean direction (order parameter) as a "slit" on a static color wheel.
+    Visualizes the mean direction (order parameter) as an arrow on a static color wheel.
     The disc is colored according to angle-color correspondence (HSV).
-    Slit length: Order parameter r.
     """
 
     def __init__(self, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent=parent)
         self.setFixedHeight(180)
-        # Set background to None for transparency
         self.setBackground(None)
 
-        self.plot = cast(Any, self).addPlot()
+        self.plot = self.addPlot()
         self.plot.setAspectLocked(True)
         self.plot.showAxis("left", False)
         self.plot.showAxis("bottom", False)
@@ -52,66 +135,49 @@ class MeanDirectionVisualizer(pg.GraphicsLayoutWidget):
         self.plot.setMouseEnabled(x=False, y=False)
 
         # Static Color Wheel (Disc)
-        # We'll use an ImageItem to create a color wheel
         size = 256
-        # indexing='ij' means xx[i, j] = x[i], yy[i, j] = y[j]
-        # This matches pyqtgraph's axisOrder='col-major' (x, y)
-        x = np.linspace(-1, 1, size)
-        y = np.linspace(-1, 1, size)
+        # indexing='ij' means first axis is X, second is Y
+        x = np.linspace(-1.0, 1.0, size)
+        y = np.linspace(-1.0, 1.0, size)
         xx, yy = np.meshgrid(x, y, indexing="ij")
 
-        r = np.sqrt(xx**2 + yy**2)
+        r_grid = np.sqrt(xx**2 + yy**2)
         coord_theta = np.arctan2(yy, xx)
 
-        # Color wheel data: RGBA
-        img_data = np.zeros((size, size, 4), dtype=np.uint8)
-
         # Mask for the disc
-        mask = r <= 1.0
+        mask = r_grid <= 1.0
 
-        # To make math theta=0 point down:
-        # Visual angle coord_theta = math_theta - pi/2
-        # => math_theta = coord_theta + pi/2
-        # Hue = (math_theta % 2pi) / 2pi
+        # math_theta = 0 (Down) should be Blue
+        # hue mapping matches theta_to_hue exactly
         math_theta = coord_theta + np.pi / 2
         hues = theta_to_hue(math_theta)
-
-        # Vectorized color generation
-        # Using V=0.8 to match RotorArrayVisualizer's val_max
         saturations = np.ones_like(hues)
         values = np.full_like(hues, 0.8)
-
         rgb_data = hsv_to_rgb_array(hues, saturations, values)
 
-        # Add alpha channel
+        # RGBA image: shape (X, Y, 4) for col-major
         img_data = np.zeros((size, size, 4), dtype=np.uint8)
         img_data[..., :3] = rgb_data
-        img_data[..., 3] = mask.astype(np.uint8) * 255
+        img_data[..., 3] = (mask * 255).astype(np.uint8)
 
-        self.img = pg.ImageItem(img_data)
-        # Center the image and scale to [-1, 1] range
-        tr = QtGui.QTransform()
-        tr.translate(-1, -1)
-        tr.scale(2.0 / size, 2.0 / size)
-        self.img.setTransform(tr)
+        self.img = pg.ImageItem(img_data, axisOrder="col-major")
+        # Map [0, size] pixels to [-1, 1] plot units
+        self.img.setRect(QtCore.QRectF(-1.0, -1.0, 2.0, 2.0))
         self.plot.addItem(self.img)
 
-        # The "slit" indicating mean direction
-        self.slit = pg.PlotCurveItem(pen=pg.mkPen("k", width=4))
-        self.plot.addItem(self.slit)
+        # High-visibility Arrow indicating mean direction
+        self.arrow = MeanDirectionArrow()
+        self.arrow.setZValue(10)
+        self.plot.addItem(self.arrow)
 
-        # Fix range
-        pad = 0.1
-        self.plot.setXRange(-1 - pad, 1 + pad)
-        self.plot.setYRange(-1 - pad, 1 + pad)
+        # Set range slightly larger than the disc
+        self.plot.setXRange(-1.1, 1.1, padding=0)
+        self.plot.setYRange(-1.1, 1.1, padding=0)
 
     def update_state(self, r: float, mean_cos: float, mean_sin: float) -> None:
         """Update the visualizer with new order parameter data."""
-        # Mean direction vector: (mean_cos, mean_sin)
-        # To rotate theta=0 to point down:
-        # Visual X = mean_sin
-        # Visual Y = -mean_cos
-        self.slit.setData([0, mean_sin], [0, -mean_cos])
+        # Visual X = mean_sin, Visual Y = -mean_cos
+        self.arrow.set_vector(r, mean_sin, -mean_cos)
 
 
 class ColorBarVisualizer(QtWidgets.QWidget):
@@ -196,11 +262,16 @@ class InfoPanel(QtWidgets.QWidget):
         super().__init__(parent=parent)
         self.setMinimumWidth(220)
         main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(4, 4, 4, 4)
 
         # Energy monitor
         self.energy_label = QtWidgets.QLabel("Energy per Rotor: N/A")
         self.energy_label.setStyleSheet("font-weight: bold; font-size: 13px;")
         main_layout.addWidget(self.energy_label)
+
+        self.energy_drift_label = QtWidgets.QLabel("Energy Drift: N/A")
+        self.energy_drift_label.setStyleSheet("font-size: 11px; color: #aaa;")
+        main_layout.addWidget(self.energy_drift_label)
 
         main_layout.addSpacing(15)
 
@@ -219,39 +290,81 @@ class InfoPanel(QtWidgets.QWidget):
         main_layout.addSpacing(15)
 
         # Order parameter plot
-        self.order_label = QtWidgets.QLabel("Order Parameter (r):")
+        self.order_label = QtWidgets.QLabel(
+            '<b style="color: #ffff00;">Order Parameter r</b> | '
+            '<b style="color: #00ffff;">Mean Kinetic K</b>:'
+        )
+        self.order_label.setStyleSheet("font-size: 11px;")
         main_layout.addWidget(self.order_label)
+
         self.order_plot = pg.PlotWidget()
         self.order_plot.setBackground("k")
+        # Minimize internal margins
+        self.order_plot.getPlotItem().layout.setContentsMargins(0, 0, 0, 0)
+
         self.order_plot.showGrid(x=True, y=True, alpha=0.3)
         self.order_plot.setYRange(0, 1.05)
         cast(Any, self.order_plot).setXRange(0, 10, padding=0)
-        self.order_plot.setFixedHeight(150)
+        self.order_plot.setFixedHeight(180)
 
-        # Configure axes
+        # Configure main axes
         font = QtGui.QFont()
         font.setPointSize(8)
         self.order_plot.getAxis("bottom").setTickFont(font)
         self.order_plot.getAxis("bottom").setTickSpacing(5, 5)
         self.order_plot.getAxis("left").setTickFont(font)
         self.order_plot.getAxis("left").setTickSpacing(0.5, 0.5)
+        self.order_plot.getAxis("left").setLabel("r", color="y")
+        # Reduce axis padding
+        self.order_plot.getAxis("left").setWidth(20)
 
         self.order_curve = self.order_plot.plot(pen=pg.mkPen("y", width=1.5))
+
+        # Secondary axis for Mean Kinetic Energy
+        self.kinetic_vb = pg.ViewBox()
+        self.order_plot.scene().addItem(self.kinetic_vb)
+        self.order_plot.getAxis("right").linkToView(self.kinetic_vb)
+        self.kinetic_vb.setXLink(self.order_plot.getViewBox())
+        self.order_plot.showAxis("right")
+        self.order_plot.getAxis("right").setLabel("K", color="c")
+        self.order_plot.getAxis("right").setTickFont(font)
+        self.order_plot.getAxis("right").setWidth(20)
+
+        self.kinetic_curve = pg.PlotCurveItem(pen=pg.mkPen("c", width=1.5))
+        self.kinetic_vb.addItem(self.kinetic_curve)
+
+        def update_vb():
+            self.kinetic_vb.setGeometry(self.order_plot.getViewBox().sceneBoundingRect())
+
+        self.order_plot.getViewBox().sigResized.connect(update_vb)
+
         main_layout.addWidget(self.order_plot)
 
         main_layout.addStretch()
 
-    def update_order_plot(self, times: list[float], values: list[float]) -> None:
-        """Update the order parameter plot with new data."""
-        self.order_curve.setData(times, values)
+    def update_order_plot(self, times: list[float], r_values: list[float], k_values: list[float]) -> None:
+        """Update the order parameter and kinetic energy plot with new data."""
+        self.order_curve.setData(times, r_values)
+        self.kinetic_curve.setData(times, k_values)
+
         if times:
             t_now = times[-1]
             if t_now > 10:
-                cast(Any, self.order_plot).setXRange(t_now - 10, t_now, padding=0)
+                view_range = [t_now - 10, t_now]
             else:
-                cast(Any, self.order_plot).setXRange(0, 10, padding=0)
+                view_range = [0, 10]
+            
+            cast(Any, self.order_plot).setXRange(view_range[0], view_range[1], padding=0)
+            self.kinetic_vb.setXRange(view_range[0], view_range[1], padding=0)
+
+            # Auto-scale kinetic energy axis
+            if k_values:
+                k_max = max(k_values)
+                self.kinetic_vb.setYRange(0, max(0.1, k_max * 1.2))
         else:
             cast(Any, self.order_plot).setXRange(0, 10, padding=0)
+            self.kinetic_vb.setXRange(0, 10, padding=0)
+            self.kinetic_vb.setYRange(0, 1)
 
 
 class ControlPanel(QtWidgets.QWidget):

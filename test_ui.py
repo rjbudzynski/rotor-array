@@ -63,3 +63,14 @@ def test_single_kick_preset(app, qtbot):
     # Center of 10x10 is at 4.5, 4.5. Closest indices 4,5
     assert app.engine.omega.max() > 5.0
     assert app.engine.omega.reshape(l_side, l_side)[5, 5] > 4.0
+
+
+def test_info_panel_elements(app):
+    """Verify new info panel elements exist and update correctly."""
+    assert app.info_panel.energy_drift_label is not None
+    assert app.info_panel.kinetic_curve is not None
+
+    # Test updating plot with new signature
+    app.info_panel.update_order_plot([0.0, 0.1], [0.5, 0.6], [0.1, 0.12])
+    assert app.info_panel.order_curve.xData is not None
+    assert app.info_panel.kinetic_curve.xData is not None

@@ -7,18 +7,19 @@ This document provides a summary of the project state and guidance for future AI
 **Rotor Array Simulation** is a Python-based interactive tool for simulating a Hamiltonian system of $L \times L$ coupled planar rotors on a square lattice in a uniform external field.
 
 ### Core Features
-- **High-Fidelity Physics**: Uses a Velocity Verlet symplectic integrator with sub-stepping for energy conservation and stability.
-- **Interactive UI**: Real-time control over coupling strength ($J$), external field ($M$), and the lattice dimension ($L$). 
+- **High-Fidelity Physics**: Uses a Velocity Verlet symplectic integrator with adaptive sub-stepping for energy conservation. Supports **Numba**-accelerated kernels for large-scale simulation.
+- **Interactive UI**: Real-time control over coupling strength ($J$), external field ($M$), time scaling, and lattice dimension ($L$).
 - **Dynamic Visualization**:
-    - Lattice visualized as a grid of discs colored by state (Hue=Angle, Value=Kinetic Energy).
-    - Mean Direction Visualizer: A static color wheel indicating the system's order parameter via a "slit".
-- **Real-time Monitoring**: Tracks energy per rotor and displays a history of the order parameter magnitude $r$.
+    - Dual-path rendering: PyQtGraph (CPU) and **OpenGL/Shader** (GPU) for ultra-fast lattice display.
+    - Lattice visualized as a grid of discs colored by state (Hue=Angle, Value=Kinetic Energy with enhanced contrast).
+    - **Mean Direction Visualizer**: A static color wheel indicating the system's order parameter via a high-fidelity white arrow with black edges.
+- **Real-time Monitoring**: Tracks energy per rotor and relative **Energy Drift**. Displays a 10s history of both the order parameter $r$ and **Mean Kinetic Energy** $K$.
 
 ## Current State
 
-The simulation has been successfully transitioned from a 1D chain to a 2D array.
-- **Completed**: 2D physics engine, grid-based visualization, color wheel order parameter display, and thermalized preset enhancement.
-- **Verification**: Fully tested for energy conservation and UI responsiveness.
+The simulation is a feature-rich 2D square lattice rotor simulation with advanced visualization and performance optimizations.
+- **Completed**: 2D physics engine (CPU/Numba), dual visualizers (CPU/OpenGL), high-fidelity arrow order parameter display, and comprehensive topological presets.
+- **Verification**: Fully tested for energy conservation, UI responsiveness, and cross-renderer consistency.
 
 ## Instructions for Agents
 

@@ -395,11 +395,12 @@ if ogl is not None:
                 float theta_val = theta * 6.28318530718 - 3.14159265359;
                 float omega_val = (omega - 0.5) * (2.0 * u_omega_max);
 
-                // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
-float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
-                float energy = omega_val * omega_val;
-                float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
-                vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+                                // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
+                                float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
+                                float energy = omega_val * omega_val;
+                                float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 2.0);
+                                vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+                
                 if (u_show_arrows > 0.5) {
                     vec2 dir = vec2(sin(theta_val), -cos(theta_val));
                     float t = dot(local, dir);
@@ -576,8 +577,8 @@ float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
             self._program.setUniformValue("u_L", float(self.l_side))
             self._program.setUniformValue("u_radius", 0.45)
             self._program.setUniformValue("u_edge", 0.05)
-            self._program.setUniformValue("u_val_min", 0.2)
-            self._program.setUniformValue("u_val_max", 0.8)
+            self._program.setUniformValue("u_val_min", 0.15)
+            self._program.setUniformValue("u_val_max", 1.0)
             self._program.setUniformValue("u_omega_max", 8.0)
             self._program.setUniformValue("u_show_arrows", 1.0 if self._show_arrows else 0.0)
             self._program.setUniformValue("u_arrow_len", 0.45)

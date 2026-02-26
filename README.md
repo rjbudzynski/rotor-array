@@ -21,22 +21,22 @@ The equations of motion are:
 
 ## Implementation
 
-- **Core**: Python 3.13 with NumPy for numerical operations and a custom **Velocity Verlet** symplectic integrator for energy-conserving dynamics.
-    - Uses sub-stepping (default 10x) per UI frame to maintain stability.
-- **Visualization**: Pyqtgraph-based display representing rotors as an $L \times L$ grid of discs.
-    - **Hue**: Maps to the rotor angle $\theta_i$.
-    - **Luminosity**: Proportional to the kinetic energy $\omega_i^2$.
-    - Includes a dedicated **Mean Direction Visualizer** (order parameter) as a static color wheel with a direction slit.
+- **Core**: Python 3.13 with NumPy and optional **Numba** JIT acceleration for high-performance physics.
+    - Uses a custom **Velocity Verlet** symplectic integrator with adaptive sub-stepping to maintain $O(10^{-6})$ energy stability.
+- **Visualization**: Dual-path rendering system.
+    - **CPU Path**: Pyqtgraph-based display using vectorized alpha-masking.
+    - **GPU Path**: OpenGL/Fragment shader path for ultra-high-performance rendering of large ($L > 400$) lattices.
+    - **Mean Direction Visualizer**: Indicates system synchronization ($r$) and direction as a high-fidelity arrow on a static color wheel.
 - **UI**: PyQt6 interface providing:
-    - Interactive sliders for $J$ and $M$.
-    - Selection of initial condition presets:
+    - Interactive sliders for $J$, $M$, time scale, and initial temperature (noise).
+    - selection of initial condition presets:
         - **Random Angles**: High entropy start.
-        - **Twisted**: Topological winding state along the horizontal axis.
-        - **Domain Wall**: Relaxation from a split configuration.
-        - **Single Kick**: Perturbation of a single rotor at position (0,0).
+        - **Twisted**: Topological winding state.
+        - **Vortex Band / Vortex Pair**: Topological defect configurations.
+        - **Skyrmion**: Localized phase twist.
         - **Thermalized**: Random initial velocities scaled by mean energy $\epsilon$.
     - Dynamic control of the lattice side length $L$.
-    - Real-time monitoring of energy per rotor and the order parameter history.
+    - Real-time monitoring of energy per rotor, relative **energy drift**, and the 10s history of $r$ and $K$ (mean kinetic energy).
 - **Testing**: Comprehensive suite covering physics, engine stability, and UI automation.
 
 ## Usage

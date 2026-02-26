@@ -72,7 +72,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # UI State
         self.dt = 0.02
         self.time_scale = 1.0
-        self.order_history: deque[tuple[float, float]] = deque()
+        self.order_history: deque[tuple[float, float, float]] = deque()
         self._last_info_update_t = 0.0
 
         # UI
@@ -126,6 +126,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initial draw
         self.y0 = self.get_initial_state()
         self.engine.set_state(self.y0)
+        self.initial_energy = self.engine.get_energy()
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
 
@@ -188,6 +189,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Reset state based on current preset
         self.y0 = self.get_initial_state()
         self.engine.set_state(self.y0)
+        self.initial_energy = self.engine.get_energy()
 
         # Update visualizer number of rotors
         self.visualizer.set_l_side(l_side)
@@ -203,10 +205,12 @@ class MainWindow(QtWidgets.QMainWindow):
     def update_j(self, j: float):
         self.j_coupling = j
         self.engine.update_params(j=j)
+        self.initial_energy = self.engine.get_energy()
 
     def update_m(self, m: float):
         self.m_field = m
         self.engine.update_params(m=m)
+        self.initial_energy = self.engine.get_energy()
 
     def update_time_scale(self, scale: float):
         self.time_scale = scale
@@ -285,6 +289,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controls.start_stop_button.setChecked(False)
 
         self.engine.set_state(self.y0)
+        self.initial_energy = self.engine.get_energy()
         self.order_history.clear()
         self._last_info_update_t = self.engine.t
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
@@ -294,21 +299,31 @@ class MainWindow(QtWidgets.QMainWindow):
         op = self.engine.get_order_parameter()
         self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
 
-        self.info_panel.update_order_plot([], [])
+        self.info_panel.update_order_plot([], [], [])
 
     def update_energy_display(self):
         energy = self.engine.get_energy()
-        mean_energy = energy / self.engine.params.n_rotors
+        n = self.engine.params.n_rotors
+        mean_energy = energy / n
         self.info_panel.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
+
+        # Calculate drift
+        if abs(self.initial_energy) > 1e-9:
+            drift = (energy - self.initial_energy) / abs(self.initial_energy)
+            self.info_panel.energy_drift_label.setText(f"Energy Drift: {drift:+.2e}")
+        else:
+            drift_abs = energy - self.initial_energy
+            self.info_panel.energy_drift_label.setText(f"Energy Drift (abs): {drift_abs:+.2e}")
 
     def simulation_step(self):
         try:
             success = self.engine.step(self.dt * self.time_scale)
 
             if success:
-                # Calculate order parameter r
+                # Calculate order parameter r and mean kinetic energy K
                 op = self.engine.get_order_parameter()
-                self.order_history.append((self.engine.t, op.r))
+                mean_k = self.engine.get_mean_kinetic_energy()
+                self.order_history.append((self.engine.t, op.r, mean_k))
 
                 # Prune history to 10s window
                 while self.order_history and self.order_history[0][0] < self.engine.t - 10:
@@ -327,8 +342,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
                     # Update order parameter plot
                     times = [h[0] for h in self.order_history]
-                    values = [h[1] for h in self.order_history]
-                    self.info_panel.update_order_plot(times, values)
+                    r_values = [h[1] for h in self.order_history]
+                    k_values = [h[2] for h in self.order_history]
+                    self.info_panel.update_order_plot(times, r_values, k_values)
         except ValueError as e:
             # Simulation parameter error
             logger.error(f"Simulation error: {e}")

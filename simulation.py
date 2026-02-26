@@ -222,6 +222,9 @@ class SimulationEngine:
     def get_energy(self) -> float:
         return self.array.hamiltonian(self.y)
 
+    def get_mean_kinetic_energy(self) -> float:
+        return float(0.5 * np.mean(self.omega**2))
+
     def get_order_parameter(self) -> OrderParameter:
         theta = self.theta
         mean_cos = float(np.mean(np.cos(theta)))
