@@ -76,18 +76,29 @@ class PhysicsWorker(QtCore.QObject):
         self._stop_requested = False
         self.started.emit()
 
+        # Real-time sync state
+        start_wall_time = time.perf_counter()
+        start_sim_time = self.engine.t
+
         try:
             while not self._stop_requested:
-                # Get local copies of control parameters
-                # (Simple floats, don't need lock for reading if they are atomic, 
-                # but we use lock for consistency with engine state)
                 with self._lock:
+                    current_sim_time = self.engine.t
+                    current_wall_time = time.perf_counter()
+                    
+                    # Target simulation time based on wall clock
+                    elapsed_wall = current_wall_time - start_wall_time
+                    target_sim_time = start_sim_time + elapsed_wall * self.time_scale
+                    
+                    # If we are ahead of real-time, sleep
+                    if current_sim_time >= target_sim_time:
+                        # Sleep for a small fraction of a frame to remain responsive
+                        time.sleep(0.001)
+                        continue
+
+                    # Otherwise, perform a step
                     dt_step = self.dt * self.time_scale
                     self.engine.step(dt_step)
-
-                # Small sleep to prevent tight-loop starvation of other threads
-                # and allow the GUI thread to catch its breath.
-                time.sleep(0.0005)
 
         except Exception as e:
             self.error.emit(str(e))
