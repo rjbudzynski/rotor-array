@@ -1,14 +1,26 @@
 import numpy as np
 
-try:
-    import taichi as ti
+# Global state for Taichi status
+TAICHI_AVAILABLE = False
+ti = None
 
-    # Attempt to initialize Taichi. Default to GPU, fallback to CPU.
-    ti.init(arch=ti.gpu, log_level=ti.WARN)
-    TAICHI_AVAILABLE = True
-except Exception:
-    ti = None
-    TAICHI_AVAILABLE = False
+def init_taichi(use_gpu: bool = True) -> bool:
+    """Initialize Taichi with the specified backend."""
+    global TAICHI_AVAILABLE, ti
+    try:
+        import taichi as ti
+        arch = ti.gpu if use_gpu else ti.cpu
+        # Only init once, but we can potentially re-init if needed
+        # For now, we'll try to init with the best arch.
+        ti.init(arch=arch, log_level=ti.WARN)
+        TAICHI_AVAILABLE = True
+        return True
+    except Exception:
+        TAICHI_AVAILABLE = False
+        return False
+
+# Attempt initial GPU init
+init_taichi(use_gpu=True)
 
 from simulation import OrderParameter, SimulationParams
 

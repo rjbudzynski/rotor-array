@@ -504,9 +504,14 @@ class ControlPanel(QtWidgets.QWidget):
         self.main_layout.addWidget(self.numba_checkbox)
 
         # Taichi acceleration toggle
-        self.taichi_checkbox = QtWidgets.QCheckBox("Use Taichi (GPU) Physics")
-        self.taichi_checkbox.setToolTip("Use Taichi-optimized GPU physics kernel if available.")
+        self.taichi_checkbox = QtWidgets.QCheckBox("Use Taichi Physics")
+        self.taichi_checkbox.setToolTip("Use Taichi-optimized physics kernel.")
         self.main_layout.addWidget(self.taichi_checkbox)
+
+        self.taichi_gpu_checkbox = QtWidgets.QCheckBox("Taichi GPU Mode")
+        self.taichi_gpu_checkbox.setToolTip("Enable GPU acceleration for Taichi.")
+        self.taichi_gpu_checkbox.setChecked(True)
+        self.main_layout.addWidget(self.taichi_gpu_checkbox)
 
         # OpenGL renderer toggle
         self.opengl_checkbox = QtWidgets.QCheckBox("Use OpenGL Renderer")
@@ -530,12 +535,14 @@ class ControlPanel(QtWidgets.QWidget):
         self.arrows_callback: Callable[[bool], None] = lambda x: None
         self.numba_callback: Callable[[bool], None] = lambda x: None
         self.taichi_callback: Callable[[bool], None] = lambda x: None
+        self.taichi_gpu_callback: Callable[[bool], None] = lambda x: None
         self.opengl_callback: Callable[[bool], None] = lambda x: None
 
         # Connect arrows checkbox
         self.arrows_checkbox.stateChanged.connect(self._on_arrows_changed)
         self.numba_checkbox.stateChanged.connect(self._on_numba_changed)
         self.taichi_checkbox.stateChanged.connect(self._on_taichi_changed)
+        self.taichi_gpu_checkbox.stateChanged.connect(self._on_taichi_gpu_changed)
         self.opengl_checkbox.stateChanged.connect(self._on_opengl_changed)
 
     def _handle_preset_ui_change(self, index: int) -> None:
@@ -649,6 +656,10 @@ class ControlPanel(QtWidgets.QWidget):
         """Enable/disable the Taichi toggle if support is unavailable."""
         self.taichi_checkbox.setEnabled(enabled)
 
+    def set_taichi_gpu_checked(self, checked: bool) -> None:
+        """Programmatically set the Taichi GPU checkbox state."""
+        self.taichi_gpu_checkbox.setChecked(checked)
+
     def set_opengl_checked(self, checked: bool) -> None:
         """Programmatically set the OpenGL checkbox state."""
         self.opengl_checkbox.setChecked(checked)
@@ -665,6 +676,10 @@ class ControlPanel(QtWidgets.QWidget):
         """Set callback for Taichi acceleration toggle."""
         self.taichi_callback = callback
 
+    def set_taichi_gpu_callback(self, callback: Callable[[bool], None]) -> None:
+        """Set callback for Taichi GPU mode toggle."""
+        self.taichi_gpu_callback = callback
+
     def set_opengl_callback(self, callback: Callable[[bool], None]) -> None:
         """Set callback for OpenGL renderer toggle."""
         self.opengl_callback = callback
@@ -676,6 +691,10 @@ class ControlPanel(QtWidgets.QWidget):
     def _on_taichi_changed(self, state: int) -> None:
         """Handle Taichi checkbox state change."""
         self.taichi_callback(state == QtCore.Qt.CheckState.Checked.value)
+
+    def _on_taichi_gpu_changed(self, state: int) -> None:
+        """Handle Taichi GPU mode checkbox state change."""
+        self.taichi_gpu_callback(state == QtCore.Qt.CheckState.Checked.value)
 
     def _on_opengl_changed(self, state: int) -> None:
         """Handle OpenGL checkbox state change."""
@@ -691,3 +710,4 @@ class ControlPanel(QtWidgets.QWidget):
         self.temp_slider.setEnabled(not running)
         self.numba_checkbox.setEnabled(not running)
         self.taichi_checkbox.setEnabled(not running)
+        self.taichi_gpu_checkbox.setEnabled(not running)

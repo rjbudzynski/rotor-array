@@ -39,6 +39,10 @@ class PhysicsWorker(QtCore.QObject):
 
         self.dt = 0.02
         self.time_scale = 1.0
+        
+        # Async pixel buffer for fast visualization
+        self._front_buffer: np.ndarray | None = None
+        self._pixel_lock = threading.Lock()
 
     @property
     def is_running(self) -> bool:
@@ -54,15 +58,14 @@ class PhysicsWorker(QtCore.QObject):
         """Set simulation state safely."""
         with self._lock:
             self.engine.set_state(y, t)
+            with self._pixel_lock:
+                self._front_buffer = None
 
-    def get_pixels(self, val_min: float, val_max: float) -> np.ndarray:
-        """Fetch pre-mapped RGBA pixels safely."""
-        with self._lock:
-            if hasattr(self.engine, 'get_rgba_pixels'):
-                return self.engine.get_rgba_pixels(val_min, val_max)
-            else:
-                # Return empty array if not supported
-                return np.zeros((1, 1, 4), dtype=np.uint8)
+    def get_pixels(self, val_min: float, val_max: float) -> np.ndarray | None:
+        """Fetch the latest available pre-mapped RGBA pixels without blocking."""
+        with self._pixel_lock:
+            # Return a copy to ensure thread safety during rendering
+            return self._front_buffer.copy() if self._front_buffer is not None else None
 
     def get_snapshot(self, full: bool = True) -> EngineSnapshot:
         """Capture a consistent snapshot of the current engine state."""
@@ -121,6 +124,12 @@ class PhysicsWorker(QtCore.QObject):
                     # Otherwise, perform a step
                     dt_step = self.dt * self.time_scale
                     self.engine.step(dt_step)
+                    
+                    # Update async pixel buffer if supported (Taichi path)
+                    if hasattr(self.engine, 'get_rgba_pixels'):
+                        new_pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+                        with self._pixel_lock:
+                            self._front_buffer = new_pixels
 
         except Exception as e:
             self.error.emit(str(e))

@@ -67,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.m_field = 0.0
         self.use_numba = NUMBA_AVAILABLE
         self.use_taichi = False
+        self.use_taichi_gpu = True
         self.use_opengl = OPENGL_AVAILABLE
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
@@ -100,6 +101,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.set_numba_checked(self.use_numba and NUMBA_AVAILABLE)
         self.controls.set_taichi_enabled(TAICHI_AVAILABLE)
         self.controls.set_taichi_checked(self.use_taichi and TAICHI_AVAILABLE)
+        self.controls.set_taichi_gpu_checked(self.use_taichi_gpu)
         self.controls.set_opengl_enabled(OPENGL_AVAILABLE)
         self.controls.set_opengl_checked(self.use_opengl and OPENGL_AVAILABLE)
         self.main_layout.addWidget(self.controls, stretch=1)
@@ -124,6 +126,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.set_arrows_callback(self.toggle_arrows)
         self.controls.set_numba_callback(self.update_numba)
         self.controls.set_taichi_callback(self.update_taichi)
+        self.controls.set_taichi_gpu_callback(self.update_taichi_gpu)
         self.controls.set_opengl_callback(self.update_opengl)
         self.controls.start_stop_button.toggled.connect(self.toggle_simulation)
         self.controls.reset_button.clicked.connect(self.reset_simulation)
@@ -283,6 +286,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if enabled and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
             self.engine.set_pbos(self.visualizer.get_pbos())
 
+    def update_taichi_gpu(self, enabled: bool):
+        from taichi_simulation import init_taichi
+        self.use_taichi_gpu = enabled
+        init_taichi(use_gpu=enabled)
+        if self.use_taichi:
+            self.reinit_simulation(self.l_side)
+
     def update_opengl(self, enabled: bool):
         if enabled and not OPENGL_AVAILABLE:
             self.controls.set_opengl_checked(False)
@@ -392,7 +402,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 snapshot = self.worker.get_snapshot(full=need_full)
                 # Fetch RGBA pixels safely via worker
                 pixels = self.worker.get_pixels(0.15, 1.0)
-                self.visualizer.update_pixels(pixels)
+                if pixels is not None:
+                    self.visualizer.update_pixels(pixels)
             else:
                 snapshot = self.worker.get_snapshot(full=need_full)
                 theta = snapshot.y[:n]
