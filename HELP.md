@@ -15,7 +15,7 @@ The system consists of $N = L^2$ rotors. Each rotor interacts with its four near
 ## Controls
 
 ### Simulation Parameters
-- **Lattice Side (L)**: Dimension of the square lattice ($N = L^2$). (Adjustable only when stopped).
+- **Lattice Side (L)**: Dimension of the square lattice ($N = L^2$). Supported up to $L=1000$ (1 million rotors). (Adjustable only when stopped).
 - **Initial Condition Presets**:
     - **Random Angles**: High entropy initial state.
     - **Twisted**: Topological winding state. Set the winding number **k**.
@@ -28,13 +28,14 @@ The system consists of $N = L^2$ rotors. Each rotor interacts with its four near
     - **Single Kick**: A localized Gaussian velocity kick.
     - **Thermalized**: Velocities assigned based on **Mean Energy (\u03b5)**.
 - **Initial Temp (T)**: Overlay random noise (phonons) on any preset.
-- **Time Scale**: Adjust the speed of the simulation (0.1x to 5.0x).
+- **Time Scale**: Adjust the speed of the simulation (0.1x to 5.0x). The engine uses real-time synchronization to ensure consistent pacing.
 
 ### Advanced Options
-- **Show Direction Arrows**: Overlays arrows on the rotors for precise orientation tracking (auto-disabled for $L > 60$).
-- **Numba Acceleration**: Uses JIT-compiled CPU kernels for significantly faster physics integration.
-- **Taichi (GPU) Physics**: Uses cross-platform GPU-accelerated kernels (Metal/CUDA/Vulkan) for maximum simulation performance on massive lattices.
-- **OpenGL Renderer**: Uses GPU shaders for ultra-high-performance visualization of large lattices.
+- **Show Direction Arrows**: Overlays arrows on the rotors for precise orientation tracking (auto-disabled for $L > 60$ or in Point Mode).
+- **Numba Acceleration**: Uses JIT-compiled CPU kernels for fast local simulation.
+- **Taichi Physics**: High-performance backend supporting massive scales.
+    - **Taichi GPU Mode**: Enables GPU acceleration (Metal/CUDA/Vulkan). If disabled, uses optimized multi-core CPU parallelization.
+- **OpenGL Renderer**: Uses GPU shaders for ultra-high-performance visualization. Automatically switches to **Point Mode** (solid pixels) when rotors are smaller than 4 pixels to eliminate Moiré artifacts.
 
 ## Monitors & Analytics
 
@@ -47,5 +48,5 @@ The system consists of $N = L^2$ rotors. Each rotor interacts with its four near
 
 ## Visualization
 - **Hue**: Maps directly to rotor angle $\theta$. **Blue** aligns with the downward external field.
-- **Luminosity**: Maps to kinetic energy ($\omega^2$). Brighter discs are moving faster. High-contrast mapping ensures even small energy fluctuations are visible.
+- **Luminosity**: Maps to kinetic energy ($\omega^2$). Brighter discs are moving faster. Range: 0.4 (rest) to 0.8 (active).
 - **Coordinate System**: $\theta = 0$ is down; $\theta = \pi/2$ is right.

@@ -4,42 +4,29 @@ An interactive simulation of a Hamiltonian dynamical system consisting of an $L 
 
 ## Physical Model
 
-The system consists of $N = L^2$ rotors on a square lattice with periodic boundary conditions in both directions. Each rotor interacts with its four nearest neighbors. The dynamics are governed by the Hamiltonian:
+The system consists of $N = L^2$ rotors on a 2D square lattice with periodic boundary conditions. The Hamiltonian is:
 
-$$H = \frac{1}{2}\sum_{i} \omega_i^2 + J\sum_{\langle i,j \rangle} (1 - \cos(\theta_i - \theta_{j})) - M\sum_{i} \cos \theta_i$$
+$$H = \sum_{i} \frac{1}{2} \omega_i^2 + J \sum_{\langle i,j \rangle} (1 - \cos(\theta_i - \theta_j)) - M \sum_{i} \cos(\theta_i)$$
 
-Where:
-- $\theta_i$ is the angle of the $i$-th rotor.
+where:
+- $\theta_i$ is the angle of rotor $i$.
 - $\omega_i$ is the angular velocity.
-- $J$ is the nearest-neighbor coupling constant.
-- $M$ is the strength of the uniform external field.
-- $\langle i,j \rangle$ denotes summation over nearest-neighbor pairs on the lattice.
+- $J$ is the coupling strength between nearest neighbors $\langle i,j \rangle$.
+- $M$ is the external field strength.
 
-The equations of motion are:
-- $\dot{\theta}_i = \omega_i$
-- $\dot{\omega}_i = -J\sum_{j \in \text{neighbors}(i)} \sin(\theta_i - \theta_j) - M\sin \theta_i$
+## Features
 
-## Implementation
-
-- **Core**: Python 3.13 with NumPy and high-performance physics backends:
+- **High-Performance Physics**: 
     - **Numba**: JIT-compiled CPU kernels for fast local simulation.
-    - **Taichi**: Cross-platform GPU kernels (Metal, CUDA, Vulkan) for massive lattices.
-    - Uses a custom **Velocity Verlet** symplectic integrator with adaptive sub-stepping to maintain $O(10^{-6})$ energy stability.
-- **Visualization**: Dual-path rendering system.
-    - **CPU Path**: Pyqtgraph-based display using vectorized alpha-masking.
-    - **GPU Path**: OpenGL/Fragment shader path for ultra-high-performance rendering of large ($L > 400$) lattices.
-    - **Mean Direction Visualizer**: Indicates system synchronization ($r$) and direction as a high-fidelity arrow on a static color wheel.
-- **UI**: PyQt6 interface providing:
-    - Interactive sliders for $J$, $M$, time scale, and initial temperature (noise).
-    - selection of initial condition presets:
-        - **Random Angles**: High entropy start.
-        - **Twisted**: Topological winding state.
-        - **Vortex Band / Vortex Pair**: Topological defect configurations.
-        - **Skyrmion**: Localized phase twist.
-        - **Thermalized**: Random initial velocities scaled by mean energy $\epsilon$.
-    - Dynamic control of the lattice side length $L$.
-    - Real-time monitoring of energy per rotor, relative **energy drift**, and the 10s history of $r$ and $K$ (mean kinetic energy).
-- **Testing**: Comprehensive suite covering physics, engine stability, and UI automation.
+    - **Taichi**: Cross-platform (Metal, CUDA, Vulkan) GPU/CPU kernels for massive scales up to $L=1000$ (1 million rotors).
+    - **True Parallelism**: Multi-threaded architecture decouples physics integration from UI rendering for 60 FPS responsiveness.
+- **Dynamic Visualization**:
+    - **Dual Render Path**: High-performance OpenGL/Shader path and standard Pyqtgraph path.
+    - **Point Mode**: Resolution-aware rendering that automatically switches to solid pixels for large lattices to eliminate Moiré artifacts.
+    - **Visual Mapping**: Hue represents angle; luminance (0.4-0.8) represents kinetic energy.
+- **Interactive Controls**: Real-time adjustment of $J$, $M$, time scale, and initial conditions.
+- **Topological Presets**: Explore various states including Vortices, Skyrmions, and Domain Walls.
+- **Real-time Monitoring**: Energy conservation tracking, relative energy drift, and order parameter history.
 
 ## Usage
 
@@ -53,4 +40,10 @@ To run unit tests:
 
 ```bash
 uv run pytest
+```
+
+To run performance benchmarks:
+
+```bash
+uv run python profile_backends.py
 ```
