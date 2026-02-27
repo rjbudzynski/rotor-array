@@ -25,10 +25,8 @@ if TAICHI_AVAILABLE:
             self.l_side = l_side
             self.n = l_side * l_side
 
-            # Fields (GPU memory)
-            self.theta = ti.field(dtype=ti.f32, shape=(l_side, l_side))
-            self.omega = ti.field(dtype=ti.f32, shape=(l_side, l_side))
-            self.accel = ti.field(dtype=ti.f32, shape=(l_side, l_side))
+            # Combined state field: [theta, omega, accel]
+            self.state = ti.Vector.field(3, dtype=ti.f32, shape=(l_side, l_side))
 
             # Parameters
             self.j = ti.field(dtype=ti.f32, shape=())
@@ -45,41 +43,41 @@ if TAICHI_AVAILABLE:
 
         @ti.kernel
         def compute_acceleration(self):
-            for i, j in self.theta:
+            for i, j in self.state:
                 # Fast periodic boundaries without modulo
                 i_up = i - 1 if i > 0 else self.l_side - 1
                 i_dn = i + 1 if i + 1 < self.l_side else 0
                 j_lt = j - 1 if j > 0 else self.l_side - 1
                 j_rt = j + 1 if j + 1 < self.l_side else 0
 
-                theta_curr = self.theta[i, j]
+                theta_curr = self.state[i, j][0]
                 # Neighbors: Right, Left, Down, Up
                 force = (
-                    ti.sin(theta_curr - self.theta[i, j_rt])
-                    + ti.sin(theta_curr - self.theta[i, j_lt])
-                    + ti.sin(theta_curr - self.theta[i_dn, j])
-                    + ti.sin(theta_curr - self.theta[i_up, j])
+                    ti.sin(theta_curr - self.state[i, j_rt][0])
+                    + ti.sin(theta_curr - self.state[i, j_lt][0])
+                    + ti.sin(theta_curr - self.state[i_dn, j][0])
+                    + ti.sin(theta_curr - self.state[i_up, j][0])
                 )
 
-                self.accel[i, j] = -self.j[None] * force - self.m[None] * ti.sin(theta_curr)
+                self.state[i, j][2] = -self.j[None] * force - self.m[None] * ti.sin(theta_curr)
 
         @ti.kernel
         def verlet_half_step_omega(self, dt: ti.f32):
             """Half step update for omega."""
-            for i, j in self.theta:
-                self.omega[i, j] += self.accel[i, j] * dt * 0.5
+            for i, j in self.state:
+                self.state[i, j][1] += self.state[i, j][2] * dt * 0.5
 
         @ti.kernel
         def verlet_full_step_theta(self, dt: ti.f32):
             """Full step update for theta with wrapping."""
-            for i, j in self.theta:
-                self.theta[i, j] += self.omega[i, j] * dt
+            for i, j in self.state:
+                self.state[i, j][0] += self.state[i, j][1] * dt
 
                 # Wrap theta to [-pi, pi]
-                val = self.theta[i, j] + ti.math.pi
+                val = self.state[i, j][0] + ti.math.pi
                 two_pi = 2.0 * ti.math.pi
                 wrapped = val - ti.floor(val / two_pi) * two_pi
-                self.theta[i, j] = wrapped - ti.math.pi
+                self.state[i, j][0] = wrapped - ti.math.pi
 
         @ti.kernel
         def compute_stats_kernel(self):
@@ -89,9 +87,9 @@ if TAICHI_AVAILABLE:
             self.sum_ke[None] = 0.0
             self.sum_pe[None] = 0.0
 
-            for i, j in self.theta:
-                t = self.theta[i, j]
-                w = self.omega[i, j]
+            for i, j in self.state:
+                t = self.state[i, j][0]
+                w = self.state[i, j][1]
 
                 # Order parameter components
                 ti.atomic_add(self.sum_cos[None], ti.cos(t))
@@ -104,8 +102,8 @@ if TAICHI_AVAILABLE:
                 i_dn = i + 1 if i + 1 < self.l_side else 0
                 j_rt = j + 1 if j + 1 < self.l_side else 0
                 
-                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i_dn, j])))
-                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i, j_rt])))
+                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.state[i_dn, j][0])))
+                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.state[i, j_rt][0])))
 
                 # Field energy
                 ti.atomic_add(self.sum_pe[None], -self.m[None] * ti.cos(t))
@@ -117,28 +115,31 @@ if TAICHI_AVAILABLE:
 
         @ti.kernel
         def copy_to_buffer(self, buf: ti.types.ndarray()):
-            for i, j in self.theta:
+            for i, j in self.state:
                 idx = (i * self.l_side + j) * 2
-                buf[idx] = self.theta[i, j]
-                buf[idx + 1] = self.omega[i, j]
+                buf[idx] = self.state[i, j][0]
+                buf[idx + 1] = self.state[i, j][1]
 
         def set_state(self, theta: np.ndarray, omega: np.ndarray):
-            self.theta.from_numpy(theta.reshape(self.l_side, self.l_side).astype(np.float32))
-            self.omega.from_numpy(omega.reshape(self.l_side, self.l_side).astype(np.float32))
+            # Reshape and pack into a (L, L, 3) temporary for transfer
+            packed = np.zeros((self.l_side, self.l_side, 3), dtype=np.float32)
+            packed[..., 0] = theta.reshape(self.l_side, self.l_side)
+            packed[..., 1] = omega.reshape(self.l_side, self.l_side)
+            self.state.from_numpy(packed)
             self.stats_dirty = True
 
         def get_theta(self) -> np.ndarray:
-            return self.theta.to_numpy().flatten()
+            return self.state.to_numpy()[..., 0].flatten()
 
         def get_omega(self) -> np.ndarray:
-            return self.omega.to_numpy().flatten()
+            return self.state.to_numpy()[..., 1].flatten()
 
         def get_state(self) -> np.ndarray:
-            """Get combined theta and omega in a single transfer if possible, or consistent format."""
-            # Currently Taichi fields require separate to_numpy() calls
-            # unless we pack them into a single dual-channel field.
-            # We'll stick to concatenated for now but minimize the calls.
-            return np.concatenate([self.get_theta(), self.get_omega()])
+            """Get combined theta and omega in a single transfer."""
+            data = self.state.to_numpy()
+            theta = data[..., 0].flatten()
+            omega = data[..., 1].flatten()
+            return np.concatenate([theta, omega])
 
     class TaichiSimulationEngine:
         """
