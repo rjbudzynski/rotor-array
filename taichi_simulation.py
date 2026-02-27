@@ -133,6 +133,13 @@ if TAICHI_AVAILABLE:
         def get_omega(self) -> np.ndarray:
             return self.omega.to_numpy().flatten()
 
+        def get_state(self) -> np.ndarray:
+            """Get combined theta and omega in a single transfer if possible, or consistent format."""
+            # Currently Taichi fields require separate to_numpy() calls
+            # unless we pack them into a single dual-channel field.
+            # We'll stick to concatenated for now but minimize the calls.
+            return np.concatenate([self.get_theta(), self.get_omega()])
+
     class TaichiSimulationEngine:
         """
         Simulation engine using Taichi backend.
@@ -225,6 +232,13 @@ if TAICHI_AVAILABLE:
         @property
         def omega(self) -> np.ndarray:
             return self.array.get_omega()
+
+        def get_state(self) -> np.ndarray:
+            return self.array.get_state()
+
+        @property
+        def y(self) -> np.ndarray:
+            return self.get_state()
 else:
     class TaichiSimulationEngine:
         def __init__(self, params):

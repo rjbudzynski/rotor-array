@@ -55,19 +55,32 @@ class PhysicsWorker(QtCore.QObject):
         with self._lock:
             self.engine.set_state(y, t)
 
-    def get_snapshot(self) -> EngineSnapshot:
+    def get_snapshot(self, full: bool = True) -> EngineSnapshot:
         """Capture a consistent snapshot of the current engine state."""
         with self._lock:
-            op = self.engine.get_order_parameter()
-            return EngineSnapshot(
-                y=self.engine.y.copy(),
-                t=self.engine.t,
-                energy=self.engine.get_energy(),
-                mean_k=self.engine.get_mean_kinetic_energy(),
-                r=op.r,
-                mean_cos=op.mean_cos,
-                mean_sin=op.mean_sin,
-            )
+            if full:
+                op = self.engine.get_order_parameter()
+                return EngineSnapshot(
+                    y=self.engine.y.copy(),
+                    t=self.engine.t,
+                    energy=self.engine.get_energy(),
+                    mean_k=self.engine.get_mean_kinetic_energy(),
+                    r=op.r,
+                    mean_cos=op.mean_cos,
+                    mean_sin=op.mean_sin,
+                )
+            else:
+                # Minimal snapshot for fast visualization
+                # We return NaN for stats to indicate they weren't fetched
+                return EngineSnapshot(
+                    y=self.engine.y.copy(),
+                    t=self.engine.t,
+                    energy=float('nan'),
+                    mean_k=float('nan'),
+                    r=float('nan'),
+                    mean_cos=float('nan'),
+                    mean_sin=float('nan'),
+                )
 
     @QtCore.pyqtSlot()
     def run_loop(self) -> None:

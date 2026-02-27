@@ -369,25 +369,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_gui(self):
         try:
-            snapshot = self.worker.get_snapshot()
+            # Throttle full snapshot (with stats) to 10 Hz
+            t_now = self.engine.t
+            need_full = (t_now - self._last_info_update_t >= 0.1)
+            
+            snapshot = self.worker.get_snapshot(full=need_full)
             n = self.engine.params.n_rotors
             theta = snapshot.y[:n]
             omega = snapshot.y[n:]
 
-            # Update history
-            self.order_history.append((snapshot.t, snapshot.r, snapshot.mean_k))
-
-            # Prune history to 10s window
-            while self.order_history and self.order_history[0][0] < snapshot.t - 10:
-                self.order_history.popleft()
-
-            # Update visualization
+            # Update visualization at 60 FPS
             self.visualizer.update_rotors(theta, omega)
 
-            # Throttle info panel updates to 10 Hz
-            if snapshot.t - self._last_info_update_t >= 0.1:
+            # Update history and info panel at 10 Hz
+            if need_full:
                 self._last_info_update_t = snapshot.t
                 
+                self.order_history.append((snapshot.t, snapshot.r, snapshot.mean_k))
+
+                # Prune history to 10s window
+                while self.order_history and self.order_history[0][0] < snapshot.t - 10:
+                    self.order_history.popleft()
+
                 # Update energy display
                 mean_energy = snapshot.energy / n
                 self.info_panel.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
