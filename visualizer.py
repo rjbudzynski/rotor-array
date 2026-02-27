@@ -316,6 +316,9 @@ if ogl is not None:
             self._pbos = None
             self._pbo_idx = 0
             self._tex_l_side: int | None = None
+            self._tex_mode: str | None = None # 'physical' or 'visual'
+            self._rgba_pixels: np.ndarray | None = None
+            self._using_rgba = False
 
         def get_pbos(self) -> list[int]:
             """Expose the PBO IDs for external (Taichi) interop."""
@@ -348,8 +351,16 @@ if ogl is not None:
         def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
             if len(theta) != self.n_rotors:
                 return
+            self._using_rgba = False
             self._theta = theta.astype(np.float32, copy=False)
             self._omega = omega.astype(np.float32, copy=False)
+            self._textures_dirty = True
+            self.update()
+
+        def update_pixels(self, rgba: np.ndarray) -> None:
+            """Update visualization using pre-mapped RGBA pixels."""
+            self._using_rgba = True
+            self._rgba_pixels = rgba
             self._textures_dirty = True
             self.update()
 
@@ -380,6 +391,7 @@ if ogl is not None:
             uniform float u_show_arrows;
             uniform float u_arrow_len;
             uniform float u_arrow_thickness;
+            uniform float u_use_rgba;
 
             vec3 hsv2rgb(vec3 c) {
                 vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
@@ -403,16 +415,28 @@ if ogl is not None:
                 }
                 vec2 sample_uv = (cell + vec2(0.5)) / u_L;
                 
-                // State contains theta in R and omega in G
-                vec2 state = texture2D(u_state, sample_uv).rg;
-                float theta_val = state.r;
-                float omega_val = state.g;
+                vec3 rgb;
+                float theta_val;
 
-                                // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
-                                float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
-                                float energy = omega_val * omega_val;
-                                float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 2.0);
-                                vec3 rgb = hsv2rgb(vec3(hue, 1.0, value));
+                if (u_use_rgba > 0.5) {
+                    // Direct RGBA mode
+                    vec4 sample = texture2D(u_state, sample_uv);
+                    rgb = sample.rgb;
+                    // For arrows in RGBA mode, we'd need theta. 
+                    // For now, arrows are disabled or fetch dummy theta.
+                    theta_val = 0.0; 
+                } else {
+                    // Physical state mode (RG32F)
+                    vec2 state = texture2D(u_state, sample_uv).rg;
+                    theta_val = state.r;
+                    float omega_val = state.g;
+
+                    // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
+                    float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
+                    float energy = omega_val * omega_val;
+                    float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 2.0);
+                    rgb = hsv2rgb(vec3(hue, 1.0, value));
+                }
                 
                 if (u_show_arrows > 0.5) {
                     vec2 dir = vec2(sin(theta_val), -cos(theta_val));
@@ -482,26 +506,39 @@ if ogl is not None:
         def _init_textures(self) -> None:
             if self._state_tex is None:
                 return
+            
+            internal_format = ogl.GL_RG32F
+            gl_format = ogl.GL_RG
+            gl_type = ogl.GL_FLOAT
+            mode = 'physical'
+            
+            if self._using_rgba:
+                internal_format = ogl.GL_RGBA8
+                gl_format = ogl.GL_RGBA
+                gl_type = ogl.GL_UNSIGNED_BYTE
+                mode = 'visual'
+
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MIN_FILTER, ogl.GL_NEAREST)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MAG_FILTER, ogl.GL_NEAREST)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_S, ogl.GL_CLAMP_TO_EDGE)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_T, ogl.GL_CLAMP_TO_EDGE)
-            # Use dual-channel (RG) 32-bit float format
+            
             ogl.glTexImage2D(
                 ogl.GL_TEXTURE_2D,
                 0,
-                ogl.GL_RG32F,
+                internal_format,
                 self.l_side,
                 self.l_side,
                 0,
-                ogl.GL_RG,
-                ogl.GL_FLOAT,
+                gl_format,
+                gl_type,
                 None,
             )
 
-            # Pre-allocate PBO buffers
-            data_size = self.l_side * self.l_side * 2 * 4  # L * L * 2 channels * 4 bytes
+            # Pre-allocate PBO buffers (using largest possible size)
+            # Physical: 8 bytes/pixel, Visual: 4 bytes/pixel. We use 8.
+            data_size = self.l_side * self.l_side * 8
             for pbo in self._pbos:
                 ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
                 ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_size, None, ogl.GL_STREAM_DRAW)
@@ -511,6 +548,7 @@ if ogl is not None:
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._textures_dirty = True
             self._tex_l_side = self.l_side
+            self._tex_mode = mode
 
         def resizeGL(self, w: int, h: int) -> None:  # noqa: N802
             dpr = self.devicePixelRatioF()
@@ -525,11 +563,20 @@ if ogl is not None:
             if self._state_tex is None or self._pbos is None:
                 return
 
-            # Pack theta (R) and omega (G) into a single dual-channel float32 array
-            state_2d = np.empty((self.l_side, self.l_side, 2), dtype=np.float32)
-            state_2d[..., 0] = self._theta.reshape(self.l_side, self.l_side)
-            state_2d[..., 1] = self._omega.reshape(self.l_side, self.l_side)
-            state_2d = np.ascontiguousarray(state_2d)
+            data_to_upload = None
+            gl_format = ogl.GL_RG
+            gl_type = ogl.GL_FLOAT
+            
+            if self._using_rgba and self._rgba_pixels is not None:
+                data_to_upload = np.ascontiguousarray(self._rgba_pixels, dtype=np.uint8)
+                gl_format = ogl.GL_RGBA
+                gl_type = ogl.GL_UNSIGNED_BYTE
+            else:
+                # Pack theta (R) and omega (G) into a single dual-channel float32 array
+                state_2d = np.empty((self.l_side, self.l_side, 2), dtype=np.float32)
+                state_2d[..., 0] = self._theta.reshape(self.l_side, self.l_side)
+                state_2d[..., 1] = self._omega.reshape(self.l_side, self.l_side)
+                data_to_upload = np.ascontiguousarray(state_2d)
 
             # Use PBO for asynchronous upload
             pbo = self._pbos[self._pbo_idx]
@@ -539,9 +586,9 @@ if ogl is not None:
             ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
             
             # Orphan buffer for performance
-            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, state_2d.nbytes, None, ogl.GL_STREAM_DRAW)
+            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_to_upload.nbytes, None, ogl.GL_STREAM_DRAW)
             # Upload data to PBO
-            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, state_2d.nbytes, state_2d, ogl.GL_STREAM_DRAW)
+            ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_to_upload.nbytes, data_to_upload, ogl.GL_STREAM_DRAW)
             
             # Trigger asynchronous transfer from PBO to texture
             ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
@@ -552,8 +599,8 @@ if ogl is not None:
                 0,
                 self.l_side,
                 self.l_side,
-                ogl.GL_RG,
-                ogl.GL_FLOAT,
+                gl_format,
+                gl_type,
                 c_void_p(0),
             )
             
@@ -572,8 +619,11 @@ if ogl is not None:
             x = (w_px - size) // 2
             y = (h_px - size) // 2
             ogl.glViewport(x, y, size, size)
-            if self._tex_l_side != self.l_side:
+            
+            current_mode = 'visual' if self._using_rgba else 'physical'
+            if self._tex_l_side != self.l_side or self._tex_mode != current_mode:
                 self._init_textures()
+            
             if self._textures_dirty:
                 self._upload_textures()
 
@@ -590,6 +640,7 @@ if ogl is not None:
             self._program.setUniformValue("u_show_arrows", 1.0 if self._show_arrows else 0.0)
             self._program.setUniformValue("u_arrow_len", 0.45)
             self._program.setUniformValue("u_arrow_thickness", 0.015)
+            self._program.setUniformValue("u_use_rgba", 1.0 if self._using_rgba else 0.0)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)

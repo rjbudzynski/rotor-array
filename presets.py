@@ -105,7 +105,7 @@ def generate_initial_state(
         theta_2d[half:, :] = np.pi
         y0[:n] = theta_2d.flatten()
         # Tiny velocity perturbation to break unstable equilibrium
-        y0[n] = 1e-6
+        y0[n] = 1e-4
     elif preset_name == "Pi/2 Domain Wall":
         # Half at pi/2, half at -pi/2 (split along x)
         theta_2d = np.zeros((l_side, l_side))
@@ -114,7 +114,7 @@ def generate_initial_state(
         theta_2d[half:, :] = -np.pi / 2
         y0[:n] = theta_2d.flatten()
         # Tiny velocity perturbation
-        y0[n] = 1e-6
+        y0[n] = 1e-4
     elif preset_name == "Vortex Band":
         # A vertical band of phase ramps
         theta_2d = np.zeros((l_side, l_side))

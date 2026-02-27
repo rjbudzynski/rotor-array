@@ -137,7 +137,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.y0 = self.get_initial_state()
         self.worker.set_state(self.y0)
         self.initial_energy = self.engine.get_energy()
-        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+        
+        if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
+            pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+            self.visualizer.update_pixels(pixels)
+        else:
+            self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+            
         self.update_energy_display()
 
         # Update mean direction visualizer
@@ -344,7 +350,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initial_energy = self.engine.get_energy()
         self.order_history.clear()
         self._last_info_update_t = self.engine.t
-        self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+        
+        if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
+            pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+            self.visualizer.update_pixels(pixels)
+        else:
+            self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+            
         self.update_energy_display()
 
         # Update mean direction visualizer
@@ -372,14 +384,24 @@ class MainWindow(QtWidgets.QMainWindow):
             # Throttle full snapshot (with stats) to 10 Hz
             t_now = self.engine.t
             need_full = (t_now - self._last_info_update_t >= 0.1)
-            
-            snapshot = self.worker.get_snapshot(full=need_full)
             n = self.engine.params.n_rotors
-            theta = snapshot.y[:n]
-            omega = snapshot.y[n:]
-
-            # Update visualization at 60 FPS
-            self.visualizer.update_rotors(theta, omega)
+            
+            # Fast path for Taichi + OpenGL: fetch pre-mapped pixels
+            if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
+                # We still need a snapshot for 't', but we can fetch pixels directly
+                snapshot = self.worker.get_snapshot(full=need_full)
+                # Fetch RGBA pixels safely via worker
+                pixels = self.worker.get_pixels(0.15, 1.0)
+                self.visualizer.update_pixels(pixels)
+            else:
+                snapshot = self.worker.get_snapshot(full=need_full)
+                theta = snapshot.y[:n]
+                omega = snapshot.y[n:]
+                self.visualizer.update_rotors(theta, omega)
+                
+                # Check Numba colors if possible (re-mapping manually for comparison)
+                # from colors import theta_to_hue, omega_to_value, hsv_to_rgb_array
+                # ...
 
             # Update history and info panel at 10 Hz
             if need_full:

@@ -4,7 +4,6 @@ try:
     import taichi as ti
 
     # Attempt to initialize Taichi. Default to GPU, fallback to CPU.
-    # We use a try-except because some environments might fail ti.init()
     ti.init(arch=ti.gpu, log_level=ti.WARN)
     TAICHI_AVAILABLE = True
 except Exception:
@@ -25,8 +24,10 @@ if TAICHI_AVAILABLE:
             self.l_side = l_side
             self.n = l_side * l_side
 
-            # Combined state field: [theta, omega, accel]
-            self.state = ti.Vector.field(3, dtype=ti.f32, shape=(l_side, l_side))
+            # State fields (GPU memory)
+            self.theta = ti.field(dtype=ti.f32, shape=(l_side, l_side))
+            self.omega = ti.field(dtype=ti.f32, shape=(l_side, l_side))
+            self.accel = ti.field(dtype=ti.f32, shape=(l_side, l_side))
 
             # Parameters
             self.j = ti.field(dtype=ti.f32, shape=())
@@ -41,43 +42,81 @@ if TAICHI_AVAILABLE:
             self.sum_pe = ti.field(dtype=ti.f32, shape=())
             self.stats_dirty = True
 
+            # Pre-mapped RGBA buffer for fast visualization
+            self.rgba_field = ti.Vector.field(4, dtype=ti.u8, shape=(l_side, l_side))
+
+        @ti.func
+        def get_accel(self, i, j):
+            # Fast periodic boundaries
+            i_up = i - 1 if i > 0 else self.l_side - 1
+            i_dn = i + 1 if i + 1 < self.l_side else 0
+            j_lt = j - 1 if j > 0 else self.l_side - 1
+            j_rt = j + 1 if j + 1 < self.l_side else 0
+
+            theta_curr = self.theta[i, j]
+            force = (
+                ti.sin(theta_curr - self.theta[i, j_rt])
+                + ti.sin(theta_curr - self.theta[i, j_lt])
+                + ti.sin(theta_curr - self.theta[i_dn, j])
+                + ti.sin(theta_curr - self.theta[i_up, j])
+            )
+            return -self.j[None] * force - self.m[None] * ti.sin(theta_curr)
+
         @ti.kernel
-        def compute_acceleration(self):
-            for i, j in self.state:
-                # Fast periodic boundaries without modulo
-                i_up = i - 1 if i > 0 else self.l_side - 1
-                i_dn = i + 1 if i + 1 < self.l_side else 0
-                j_lt = j - 1 if j > 0 else self.l_side - 1
-                j_rt = j + 1 if j + 1 < self.l_side else 0
-
-                theta_curr = self.state[i, j][0]
-                # Neighbors: Right, Left, Down, Up
-                force = (
-                    ti.sin(theta_curr - self.state[i, j_rt][0])
-                    + ti.sin(theta_curr - self.state[i, j_lt][0])
-                    + ti.sin(theta_curr - self.state[i_dn, j][0])
-                    + ti.sin(theta_curr - self.state[i_up, j][0])
-                )
-
-                self.state[i, j][2] = -self.j[None] * force - self.m[None] * ti.sin(theta_curr)
+        def update_acceleration(self):
+            for i, j in self.theta:
+                self.accel[i, j] = self.get_accel(i, j)
 
         @ti.kernel
         def verlet_half_step_omega(self, dt: ti.f32):
-            """Half step update for omega."""
-            for i, j in self.state:
-                self.state[i, j][1] += self.state[i, j][2] * dt * 0.5
+            for i, j in self.theta:
+                self.omega[i, j] += self.accel[i, j] * dt * 0.5
 
         @ti.kernel
         def verlet_full_step_theta(self, dt: ti.f32):
-            """Full step update for theta with wrapping."""
-            for i, j in self.state:
-                self.state[i, j][0] += self.state[i, j][1] * dt
+            for i, j in self.theta:
+                self.theta[i, j] += self.omega[i, j] * dt
+                val = self.theta[i, j] + ti.math.pi
+                self.theta[i, j] = (val % (2.0 * ti.math.pi)) - ti.math.pi
 
-                # Wrap theta to [-pi, pi]
-                val = self.state[i, j][0] + ti.math.pi
-                two_pi = 2.0 * ti.math.pi
-                wrapped = val - ti.floor(val / two_pi) * two_pi
-                self.state[i, j][0] = wrapped - ti.math.pi
+        @ti.kernel
+        def map_colors(self, val_min: ti.f32, val_max: ti.f32):
+            for i, j in self.theta:
+                t = self.theta[i, j]
+                w = self.omega[i, j]
+                
+                # 1. Hue mapping
+                hue = ((t + 4.18879020478) % 6.28318530718) / 6.28318530718
+                
+                # 2. Value mapping
+                energy = w * w
+                energy_factor = ti.tanh(energy / 2.0)
+                value = val_min + (val_max - val_min) * energy_factor
+                
+                # 3. HSV to RGB
+                h = hue * 6.0
+                i_h = ti.cast(ti.floor(h), ti.i32)
+                f = h - ti.cast(i_h, ti.f32)
+                p = 0.0
+                q = value * (1.0 - f)
+                t_val = value * f
+                
+                r, g, b = 0.0, 0.0, 0.0
+                ih_mod = i_h % 6
+                if ih_mod == 0:   r, g, b = value, t_val, p
+                elif ih_mod == 1: r, g, b = q, value, p
+                elif ih_mod == 2: r, g, b = p, value, t_val
+                elif ih_mod == 3: r, g, b = p, q, value
+                elif ih_mod == 4: r, g, b = t_val, p, value
+                else:             r, g, b = value, p, q
+                
+                # RGBA ordering
+                self.rgba_field[i, j] = ti.Vector([
+                    ti.cast(ti.math.clamp(r * 255.0, 0.0, 255.0), ti.u8),
+                    ti.cast(ti.math.clamp(g * 255.0, 0.0, 255.0), ti.u8),
+                    ti.cast(ti.math.clamp(b * 255.0, 0.0, 255.0), ti.u8),
+                    ti.cast(255, ti.u8)
+                ])
 
         @ti.kernel
         def compute_stats_kernel(self):
@@ -87,25 +126,19 @@ if TAICHI_AVAILABLE:
             self.sum_ke[None] = 0.0
             self.sum_pe[None] = 0.0
 
-            for i, j in self.state:
-                t = self.state[i, j][0]
-                w = self.state[i, j][1]
+            for i, j in self.theta:
+                t = self.theta[i, j]
+                w = self.omega[i, j]
 
-                # Order parameter components
                 ti.atomic_add(self.sum_cos[None], ti.cos(t))
                 ti.atomic_add(self.sum_sin[None], ti.sin(t))
-
-                # Kinetic energy
                 ti.atomic_add(self.sum_ke[None], 0.5 * w * w)
 
-                # Potential energy (neighbors) - only Down and Right to avoid double counting
                 i_dn = i + 1 if i + 1 < self.l_side else 0
                 j_rt = j + 1 if j + 1 < self.l_side else 0
                 
-                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.state[i_dn, j][0])))
-                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.state[i, j_rt][0])))
-
-                # Field energy
+                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i_dn, j])))
+                ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i, j_rt])))
                 ti.atomic_add(self.sum_pe[None], -self.m[None] * ti.cos(t))
 
         def compute_stats(self):
@@ -113,33 +146,32 @@ if TAICHI_AVAILABLE:
                 self.compute_stats_kernel()
                 self.stats_dirty = False
 
-        @ti.kernel
-        def copy_to_buffer(self, buf: ti.types.ndarray()):
-            for i, j in self.state:
-                idx = (i * self.l_side + j) * 2
-                buf[idx] = self.state[i, j][0]
-                buf[idx + 1] = self.state[i, j][1]
-
         def set_state(self, theta: np.ndarray, omega: np.ndarray):
-            # Reshape and pack into a (L, L, 3) temporary for transfer
-            packed = np.zeros((self.l_side, self.l_side, 3), dtype=np.float32)
-            packed[..., 0] = theta.reshape(self.l_side, self.l_side)
-            packed[..., 1] = omega.reshape(self.l_side, self.l_side)
-            self.state.from_numpy(packed)
+            # Reshape input 1D arrays to 2D row-major (L, L)
+            # Then transpose to match Taichi's (i, j) = (col, row) layout
+            # which aligns with our col-major rendering.
+            t_2d = theta.reshape(self.l_side, self.l_side).T.astype(np.float32)
+            w_2d = omega.reshape(self.l_side, self.l_side).T.astype(np.float32)
+            
+            self.theta.from_numpy(np.ascontiguousarray(t_2d))
+            self.omega.from_numpy(np.ascontiguousarray(w_2d))
+            
+            # Immediately compute acceleration for the new state
+            self.update_acceleration()
             self.stats_dirty = True
 
         def get_theta(self) -> np.ndarray:
-            return self.state.to_numpy()[..., 0].flatten()
+            return self.theta.to_numpy().T.flatten()
 
         def get_omega(self) -> np.ndarray:
-            return self.state.to_numpy()[..., 1].flatten()
+            return self.omega.to_numpy().T.flatten()
 
         def get_state(self) -> np.ndarray:
-            """Get combined theta and omega in a single transfer."""
-            data = self.state.to_numpy()
-            theta = data[..., 0].flatten()
-            omega = data[..., 1].flatten()
-            return np.concatenate([theta, omega])
+            return np.concatenate([self.get_theta(), self.get_omega()])
+
+        def get_rgba_pixels(self, val_min: float, val_max: float) -> np.ndarray:
+            self.map_colors(val_min, val_max)
+            return self.rgba_field.to_numpy().transpose(1, 0, 2)
 
     class TaichiSimulationEngine:
         """
@@ -151,21 +183,16 @@ if TAICHI_AVAILABLE:
             self.array = TaichiRotorArray(params.l_side, params.j_coupling, params.m_field)
             self.t = 0.0
             self.substeps = 10
-            self._initial_energy = 0.0
             self._pbos = []
             self._pbo_idx = 0
 
         def set_pbos(self, pbos: list[int]):
-            """Set the OpenGL PBO IDs for zero-copy rendering."""
             self._pbos = pbos
 
         def set_state(self, y: np.ndarray, t: float = 0.0):
             n = self.params.n_rotors
-            theta = y[:n]
-            omega = y[n:]
-            self.array.set_state(theta, omega)
+            self.array.set_state(y[:n], y[n:])
             self.t = t
-            self.array.compute_acceleration()
 
         def update_params(self, j: float | None = None, m: float | None = None):
             if j is not None:
@@ -177,37 +204,18 @@ if TAICHI_AVAILABLE:
         def step(self, dt: float) -> bool:
             sub_dt = dt / self.substeps
             
-            # Optimized Velocity Verlet:
-            # 1. Half step omega (kick)
-            # 2. Loop:
-            #    a. Full step theta (drift)
-            #    b. Compute acceleration (new forces)
-            #    c. Full step omega (double kick)
-            # 3. Last Half step omega (kick)
-            
-            # This reduces kernel launches by consolidating steps.
+            # Use separate kernels but keep them on GPU
             self.array.verlet_half_step_omega(sub_dt)
-            
             for i in range(self.substeps):
                 self.array.verlet_full_step_theta(sub_dt)
-                self.array.compute_acceleration()
+                self.array.update_acceleration()
                 if i < self.substeps - 1:
-                    # Full kick for internal steps
                     self.array.verlet_half_step_omega(sub_dt * 2.0)
                 else:
-                    # Final half kick
                     self.array.verlet_half_step_omega(sub_dt)
             
             self.t += dt
             self.array.stats_dirty = True
-
-            # If zero-copy PBOs are available, write directly to them
-            if self._pbos:
-                # Use current PBO
-                pbo = self._pbos[self._pbo_idx]
-                self._pbo_idx = (self._pbo_idx + 1) % 2
-                # TODO: Implement direct pointer map or ExternalArray sync
-            
             return True
 
         def get_energy(self) -> float:
@@ -226,6 +234,9 @@ if TAICHI_AVAILABLE:
             r = float(np.sqrt(mean_cos**2 + mean_sin**2))
             return OrderParameter(r, mean_cos, mean_sin)
 
+        def get_rgba_pixels(self, val_min: float, val_max: float) -> np.ndarray:
+            return self.array.get_rgba_pixels(val_min, val_max)
+
         @property
         def theta(self) -> np.ndarray:
             return self.array.get_theta()
@@ -234,13 +245,14 @@ if TAICHI_AVAILABLE:
         def omega(self) -> np.ndarray:
             return self.array.get_omega()
 
-        def get_state(self) -> np.ndarray:
-            return self.array.get_state()
-
         @property
         def y(self) -> np.ndarray:
             return self.get_state()
+
+        def get_state(self) -> np.ndarray:
+            return self.array.get_state()
 else:
     class TaichiSimulationEngine:
         def __init__(self, params):
+            self.params = params
             raise ImportError("Taichi is not available or failed to initialize.")

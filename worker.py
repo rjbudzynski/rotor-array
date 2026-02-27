@@ -55,6 +55,15 @@ class PhysicsWorker(QtCore.QObject):
         with self._lock:
             self.engine.set_state(y, t)
 
+    def get_pixels(self, val_min: float, val_max: float) -> np.ndarray:
+        """Fetch pre-mapped RGBA pixels safely."""
+        with self._lock:
+            if hasattr(self.engine, 'get_rgba_pixels'):
+                return self.engine.get_rgba_pixels(val_min, val_max)
+            else:
+                # Return empty array if not supported
+                return np.zeros((1, 1, 4), dtype=np.uint8)
+
     def get_snapshot(self, full: bool = True) -> EngineSnapshot:
         """Capture a consistent snapshot of the current engine state."""
         with self._lock:
