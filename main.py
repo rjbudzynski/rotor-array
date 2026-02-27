@@ -11,6 +11,7 @@ from simulation import NUMBA_AVAILABLE, SimulationEngine, SimulationParams
 from taichi_simulation import TAICHI_AVAILABLE, TaichiSimulationEngine
 from ui import ControlPanel, InfoPanel
 from visualizer import OPENGL_AVAILABLE, RotorArrayGLVisualizer, RotorArrayVisualizer
+from worker import EngineSnapshot, PhysicsWorker
 
 if OPENGL_AVAILABLE:
     from visualizer import RotorArrayGLVisualizer
@@ -70,6 +71,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         self.engine = SimulationEngine(params, use_numba=self.use_numba)
+        self.worker = PhysicsWorker(self.engine)
+        self.worker_thread = QtCore.QThread()
+        self.worker.moveToThread(self.worker_thread)
+        self.worker_thread.start()
 
         # UI State
         self.dt = 0.02
@@ -124,13 +129,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls.reset_button.clicked.connect(self.reset_simulation)
         self.controls.help_button.clicked.connect(self.show_help)
 
-        # Timer for simulation loop
+        # Timer for GUI updates
         self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.simulation_step)
+        self.timer.timeout.connect(self.update_gui)
 
         # Initial draw
         self.y0 = self.get_initial_state()
-        self.engine.set_state(self.y0)
+        self.worker.set_state(self.y0)
         self.initial_energy = self.engine.get_energy()
         self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
         self.update_energy_display()
@@ -187,6 +192,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def reinit_simulation(self, l_side: int):
         """Re-initialize the simulation with a new lattice size or preset."""
+        was_running = self.worker.is_running
+        if was_running:
+            self.toggle_simulation(False)
+
         self.l_side = l_side
         params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
         
@@ -197,10 +206,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.engine.set_pbos(self.visualizer.get_pbos())
         else:
             self.engine = SimulationEngine(params, use_numba=self.use_numba)
+        
+        # Re-associate worker with new engine
+        self.worker.engine = self.engine
+        self.worker.dt = self.dt
+        self.worker.time_scale = self.time_scale
 
         # Reset state based on current preset
         self.y0 = self.get_initial_state()
-        self.engine.set_state(self.y0)
+        self.worker.set_state(self.y0)
         self.initial_energy = self.engine.get_energy()
 
         # Update visualizer number of rotors
@@ -213,19 +227,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.toggle_arrows(False)
 
         self.reset_simulation()
+        
+        if was_running:
+            self.toggle_simulation(True)
 
     def update_j(self, j: float):
         self.j_coupling = j
-        self.engine.update_params(j=j)
+        self.worker.set_params(j=j)
         self.initial_energy = self.engine.get_energy()
 
     def update_m(self, m: float):
         self.m_field = m
-        self.engine.update_params(m=m)
+        self.worker.set_params(m=m)
         self.initial_energy = self.engine.get_energy()
 
     def update_time_scale(self, scale: float):
         self.time_scale = scale
+        self.worker.time_scale = scale
 
     def toggle_arrows(self, show: bool):
         """Toggle arrow overlay visibility.
@@ -263,10 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if enabled and not OPENGL_AVAILABLE:
             self.controls.set_opengl_checked(False)
             return
-        was_running = self.timer.isActive()
-        if was_running:
-            self.toggle_simulation(False)
-
+        
         self.use_opengl = enabled
         self._replace_visualizer()
         
@@ -277,16 +292,19 @@ class MainWindow(QtWidgets.QMainWindow):
         # Sync arrow state after visualizer switch
         self.toggle_arrows(self.controls.arrows_checkbox.isChecked())
 
-        if was_running:
-            self.toggle_simulation(True)
-
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)
         if started:
             self.controls.start_stop_button.setText("Stop")
+            # Start the worker loop in the background thread
+            QtCore.QMetaObject.invokeMethod(
+                self.worker, "run_loop", QtCore.Qt.ConnectionType.QueuedConnection
+            )
+            # Start the GUI update timer (60 FPS)
             self.timer.start(int(1000 / 60))
         else:
             self.controls.start_stop_button.setText("Start")
+            self.worker.request_stop()
             self.timer.stop()
 
     def show_help(self):
@@ -322,7 +340,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.controls.start_stop_button.isChecked():
             self.controls.start_stop_button.setChecked(False)
 
-        self.engine.set_state(self.y0)
+        self.worker.set_state(self.y0)
         self.initial_energy = self.engine.get_energy()
         self.order_history.clear()
         self._last_info_update_t = self.engine.t
@@ -349,60 +367,55 @@ class MainWindow(QtWidgets.QMainWindow):
             drift_abs = energy - self.initial_energy
             self.info_panel.energy_drift_label.setText(f"Energy Drift (abs): {drift_abs:+.2e}")
 
-    def simulation_step(self):
+    def update_gui(self):
         try:
-            success = self.engine.step(self.dt * self.time_scale)
+            snapshot = self.worker.get_snapshot()
+            n = self.engine.params.n_rotors
+            theta = snapshot.y[:n]
+            omega = snapshot.y[n:]
 
-            if success:
-                # Calculate order parameter r and mean kinetic energy K
-                op = self.engine.get_order_parameter()
-                mean_k = self.engine.get_mean_kinetic_energy()
-                self.order_history.append((self.engine.t, op.r, mean_k))
+            # Update history
+            self.order_history.append((snapshot.t, snapshot.r, snapshot.mean_k))
 
-                # Prune history to 10s window
-                while self.order_history and self.order_history[0][0] < self.engine.t - 10:
-                    self.order_history.popleft()
+            # Prune history to 10s window
+            while self.order_history and self.order_history[0][0] < snapshot.t - 10:
+                self.order_history.popleft()
 
-                # Update visualization
-                self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
+            # Update visualization
+            self.visualizer.update_rotors(theta, omega)
 
-                # Throttle info panel updates to 10 Hz
-                if self.engine.t - self._last_info_update_t >= 0.1:
-                    self._last_info_update_t = self.engine.t
-                    self.update_energy_display()
+            # Throttle info panel updates to 10 Hz
+            if snapshot.t - self._last_info_update_t >= 0.1:
+                self._last_info_update_t = snapshot.t
+                
+                # Update energy display
+                mean_energy = snapshot.energy / n
+                self.info_panel.energy_label.setText(f"Energy per Rotor: {mean_energy:.4f}")
+                
+                if abs(self.initial_energy) > 1e-9:
+                    drift = (snapshot.energy - self.initial_energy) / abs(self.initial_energy)
+                    self.info_panel.energy_drift_label.setText(f"Energy Drift: {drift:+.2e}")
+                else:
+                    drift_abs = snapshot.energy - self.initial_energy
+                    self.info_panel.energy_drift_label.setText(f"Energy Drift (abs): {drift_abs:+.2e}")
 
-                    # Update mean direction visualizer
-                    self.info_panel.mean_dir_visualizer.update_state(op.r, op.mean_cos, op.mean_sin)
+                # Update mean direction visualizer
+                self.info_panel.mean_dir_visualizer.update_state(snapshot.r, snapshot.mean_cos, snapshot.mean_sin)
 
-                    # Update order parameter plot
-                    times = [h[0] for h in self.order_history]
-                    r_values = [h[1] for h in self.order_history]
-                    k_values = [h[2] for h in self.order_history]
-                    self.info_panel.update_order_plot(times, r_values, k_values)
-        except ValueError as e:
-            # Simulation parameter error
-            logger.error(f"Simulation error: {e}")
-            self.timer.stop()
-            self.controls.start_stop_button.setChecked(False)
-            self.controls.start_stop_button.setText("Start")
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Simulation Error",
-                f"Simulation stopped due to error:\n{e}\n\n"
-                "Try reducing time scale or changing parameters.",
-            )
+                # Update order parameter plot
+                times = [h[0] for h in self.order_history]
+                r_values = [h[1] for h in self.order_history]
+                k_values = [h[2] for h in self.order_history]
+                self.info_panel.update_order_plot(times, r_values, k_values)
         except Exception as e:
-            # Unexpected error
-            logger.exception(f"Unexpected simulation error: {e}")
-            self.timer.stop()
-            self.controls.start_stop_button.setChecked(False)
-            self.controls.start_stop_button.setText("Start")
-            QtWidgets.QMessageBox.critical(
-                self,
-                "Critical Error",
-                f"Unexpected error in simulation:\n{e}\n\n"
-                "Please check the logs and restart the application.",
-            )
+            logger.exception(f"Unexpected GUI update error: {e}")
+
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:  # noqa: N802
+        """Ensure physics thread is stopped on close."""
+        self.worker.request_stop()
+        self.worker_thread.quit()
+        self.worker_thread.wait()
+        super().closeEvent(a0)
 
 
 def main():

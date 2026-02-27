@@ -74,3 +74,20 @@ def test_info_panel_elements(app):
     app.info_panel.update_order_plot([0.0, 0.1], [0.5, 0.6], [0.1, 0.12])
     assert app.info_panel.order_curve.xData is not None
     assert app.info_panel.kinetic_curve.xData is not None
+
+
+def test_worker_parallelism(app, qtbot):
+    """Verify that the worker actually runs in the background thread."""
+    assert not app.worker.is_running
+
+    # Start simulation
+    qtbot.mouseClick(app.controls.start_stop_button, QtCore.Qt.MouseButton.LeftButton)
+    
+    # Wait for worker to start (it runs in another thread)
+    qtbot.waitUntil(lambda: app.worker.is_running, timeout=1000)
+    assert app.worker.is_running
+
+    # Stop simulation
+    qtbot.mouseClick(app.controls.start_stop_button, QtCore.Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: not app.worker.is_running, timeout=1000)
+    assert not app.worker.is_running
