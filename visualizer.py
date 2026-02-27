@@ -348,7 +348,8 @@ if ogl is not None:
                 if (u_use_rgba > 0.5) {
                     vec4 sample = texture2D(u_state, sample_uv);
                     rgb = sample.rgb;
-                    theta_val = 0.0; 
+                    // Decode theta from alpha channel: [0, 1] -> [-pi, pi]
+                    theta_val = sample.a * 6.28318530718 - 3.14159265359;
                 } else {
                     vec2 state = texture2D(u_state, sample_uv).rg;
                     theta_val = state.r;

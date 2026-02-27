@@ -135,7 +135,7 @@ if TAICHI_AVAILABLE:
                     ti.cast(ti.math.clamp(r * 255.0, 0.0, 255.0), ti.u8),
                     ti.cast(ti.math.clamp(g * 255.0, 0.0, 255.0), ti.u8),
                     ti.cast(ti.math.clamp(b * 255.0, 0.0, 255.0), ti.u8),
-                    ti.cast(255, ti.u8)
+                    ti.cast(ti.math.clamp((t + ti.math.pi) / (2.0 * ti.math.pi) * 255.0, 0.0, 255.0), ti.u8)
                 ])
 
         @ti.kernel
