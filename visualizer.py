@@ -55,10 +55,8 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.n_rotors = l_side**2
         self.show_arrows = False
         self._theta_cache: np.ndarray | None = None
-        super().__init__(parent=parent)
-
-        # Upsample depends on width/height, so we defer full init
         self._upsample = 16 
+        super().__init__(parent=parent)
 
         self.plot = cast(Any, self).addPlot()
         self.plot.setAspectLocked(True)
