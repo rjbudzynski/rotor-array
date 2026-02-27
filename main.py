@@ -70,6 +70,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.use_taichi_gpu = False
         self.use_opengl = OPENGL_AVAILABLE
 
+        params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
+
         # Default engine logic
         if self.use_taichi:
             self.use_numba = False
