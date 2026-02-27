@@ -4,23 +4,31 @@ import numpy as np
 TAICHI_AVAILABLE = False
 ti = None
 
+try:
+    import taichi as ti
+    TAICHI_AVAILABLE = True
+except ImportError:
+    ti = None
+    TAICHI_AVAILABLE = False
+
 def init_taichi(use_gpu: bool = True) -> bool:
-    """Initialize Taichi with the specified backend."""
+    """Initialize Taichi with the specified backend. Should be called before engine instantiation."""
     global TAICHI_AVAILABLE, ti
+    if not TAICHI_AVAILABLE:
+        return False
     try:
-        import taichi as ti
         arch = ti.gpu if use_gpu else ti.cpu
-        # Only init once, but we can potentially re-init if needed
-        # For now, we'll try to init with the best arch.
+        # log_level=ti.WARN to keep console clean
         ti.init(arch=arch, log_level=ti.WARN)
-        TAICHI_AVAILABLE = True
         return True
     except Exception:
-        TAICHI_AVAILABLE = False
-        return False
-
-# Attempt initial GPU init
-init_taichi(use_gpu=True)
+        # Fallback to CPU if GPU fails
+        try:
+            ti.init(arch=ti.cpu, log_level=ti.WARN)
+            return True
+        except Exception:
+            TAICHI_AVAILABLE = False
+            return False
 
 from simulation import OrderParameter, SimulationParams
 
@@ -36,7 +44,7 @@ if TAICHI_AVAILABLE:
             self.l_side = l_side
             self.n = l_side * l_side
 
-            # State fields (GPU memory)
+            # State fields (allocated on current Taichi backend)
             self.theta = ti.field(dtype=ti.f32, shape=(l_side, l_side))
             self.omega = ti.field(dtype=ti.f32, shape=(l_side, l_side))
             self.accel = ti.field(dtype=ti.f32, shape=(l_side, l_side))
@@ -89,6 +97,7 @@ if TAICHI_AVAILABLE:
             for i, j in self.theta:
                 self.theta[i, j] += self.omega[i, j] * dt
                 val = self.theta[i, j] + ti.math.pi
+                # Robust wrapping
                 self.theta[i, j] = (val % (2.0 * ti.math.pi)) - ti.math.pi
 
         @ti.kernel
@@ -122,7 +131,6 @@ if TAICHI_AVAILABLE:
                 elif ih_mod == 4: r, g, b = t_val, p, value
                 else:             r, g, b = value, p, q
                 
-                # RGBA ordering
                 self.rgba_field[i, j] = ti.Vector([
                     ti.cast(ti.math.clamp(r * 255.0, 0.0, 255.0), ti.u8),
                     ti.cast(ti.math.clamp(g * 255.0, 0.0, 255.0), ti.u8),
@@ -161,7 +169,6 @@ if TAICHI_AVAILABLE:
         def set_state(self, theta: np.ndarray, omega: np.ndarray):
             # Reshape input 1D arrays to 2D row-major (L, L)
             # Then transpose to match Taichi's (i, j) = (col, row) layout
-            # which aligns with our col-major rendering.
             t_2d = theta.reshape(self.l_side, self.l_side).T.astype(np.float32)
             w_2d = omega.reshape(self.l_side, self.l_side).T.astype(np.float32)
             
@@ -216,7 +223,6 @@ if TAICHI_AVAILABLE:
         def step(self, dt: float) -> bool:
             sub_dt = dt / self.substeps
             
-            # Use separate kernels but keep them on GPU
             self.array.verlet_half_step_omega(sub_dt)
             for i in range(self.substeps):
                 self.array.verlet_full_step_theta(sub_dt)

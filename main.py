@@ -105,10 +105,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
         
-        # Sync Taichi backend with default GPU mode
-        from taichi_simulation import init_taichi
-        init_taichi(use_gpu=self.use_taichi_gpu)
-
         self.controls.set_numba_enabled(NUMBA_AVAILABLE)
         self.controls.set_numba_checked(self.use_numba)
         self.controls.set_taichi_enabled(TAICHI_AVAILABLE)
@@ -473,6 +469,10 @@ def main():
 
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationDisplayName("Rotor Array Simulation")
+
+    # Initialize Taichi once at start (Default to CPU mode per requirements)
+    from taichi_simulation import init_taichi
+    init_taichi(use_gpu=False)
 
     # Set application icon
     icon_path = os.path.join(os.path.dirname(__file__), "icon.svg")
