@@ -66,12 +66,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.j_coupling = 1.0
         self.m_field = 0.0
         self.use_numba = NUMBA_AVAILABLE
-        self.use_taichi = False
-        self.use_taichi_gpu = True
+        self.use_taichi = TAICHI_AVAILABLE
+        self.use_taichi_gpu = False
         self.use_opengl = OPENGL_AVAILABLE
 
-        params = SimulationParams(l_side=l_side, j_coupling=self.j_coupling, m_field=self.m_field)
-        self.engine = SimulationEngine(params, use_numba=self.use_numba)
+        # Default engine logic
+        if self.use_taichi:
+            self.use_numba = False
+            self.engine = TaichiSimulationEngine(params)
+        else:
+            self.engine = SimulationEngine(params, use_numba=self.use_numba)
+
         self.worker = PhysicsWorker(self.engine)
         self.worker_thread = QtCore.QThread()
         self.worker.moveToThread(self.worker_thread)
@@ -97,8 +102,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.controls = ControlPanel()
         self.controls.l_spin.setValue(self.l_side)
+        
+        # Sync Taichi backend with default GPU mode
+        from taichi_simulation import init_taichi
+        init_taichi(use_gpu=self.use_taichi_gpu)
+
         self.controls.set_numba_enabled(NUMBA_AVAILABLE)
-        self.controls.set_numba_checked(self.use_numba and NUMBA_AVAILABLE)
+        self.controls.set_numba_checked(self.use_numba)
         self.controls.set_taichi_enabled(TAICHI_AVAILABLE)
         self.controls.set_taichi_checked(self.use_taichi and TAICHI_AVAILABLE)
         self.controls.set_taichi_gpu_checked(self.use_taichi_gpu)

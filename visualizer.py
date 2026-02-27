@@ -27,37 +27,38 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     ARROW_THRESHOLD = 60  # Auto-disable arrows when L > this value
     MIN_UPSAMPLE = 1  # 1 pixel per disc (Point Mode) for massive L
     MAX_UPSAMPLE = 64  # Maximum pixels per disc (for small L)
+    POINT_MODE_PIXEL_THRESHOLD = 4.0  # Switch to solid pixels if rotor < 4px
 
-    @staticmethod
-    def _calculate_upsample(l_side: int) -> int:
-        """Calculate adaptive upsample rate based on lattice size.
-
-        Formula: max(1, min(64, int(640 / L)))
-        - L=10: 64 pixels/disc (crisp large discs)
-        - L=20: 32 pixels/disc
-        - L=40: 16 pixels/disc
-        - L>=640: 1 pixel/disc (Point Mode)
-
-        Args:
-            l_side: Lattice side length (number of rotors per side).
-
-        Returns:
-            Upsample rate: pixels per disc in each dimension.
-        """
+    def _calculate_upsample(self, l_side: int) -> int:
+        """Calculate adaptive upsample rate based on lattice size and widget scale."""
         if l_side <= 0:
             return 64
+        
+        # Calculate how many screen pixels represent one lattice unit
+        size = min(self.width(), self.height())
+        if size <= 0: # Widget not yet laid out
+            size = 640
+            
+        pixel_per_rotor = size / l_side
+        
+        # If rotor is smaller than threshold, use 1 pixel (Point Mode)
+        if pixel_per_rotor < self.POINT_MODE_PIXEL_THRESHOLD:
+            return 1
+            
         return max(
-            RotorArrayVisualizer.MIN_UPSAMPLE,
-            min(RotorArrayVisualizer.MAX_UPSAMPLE, int(640 / l_side)),
+            4, # Minimum anti-aliased upsample
+            min(self.MAX_UPSAMPLE, int(640 / l_side)),
         )
 
     def __init__(self, l_side: int, parent: QtWidgets.QWidget | None = None):
         self.l_side = l_side
         self.n_rotors = l_side**2
         self.show_arrows = False
-        self._theta_cache: np.ndarray | None = None  # Cache theta for arrow rendering
-        self._upsample = self._calculate_upsample(l_side)
+        self._theta_cache: np.ndarray | None = None
         super().__init__(parent=parent)
+
+        # Upsample depends on width/height, so we defer full init
+        self._upsample = 16 
 
         self.plot = cast(Any, self).addPlot()
         self.plot.setAspectLocked(True)
@@ -71,7 +72,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.img.setOpts(axisOrder="col-major")
         self.plot.addItem(self.img)
 
-        # Arrow overlay layer (second ImageItem on top)
+        # Arrow overlay layer
         self.arrows_img = pg.ImageItem()
         self.arrows_img.setOpts(axisOrder="col-major")
         self.plot.addItem(self.arrows_img)
@@ -79,45 +80,25 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.set_l_side(l_side)
 
     def resizeEvent(self, ev: QtGui.QResizeEvent | None) -> None:  # noqa: N802
-        """Ensure plot fills the smaller dimension, matching OpenGL behavior."""
+        """Handle resize by potentially switching to Point Mode."""
         super().resizeEvent(ev)
-        # Get the view box and lock it to a square aspect ratio that fills the widget
-        # (skip if plot not yet initialized during __init__)
         if hasattr(self, "plot") and self.plot is not None:
             vb = self.plot.getViewBox()
             if vb is not None:
                 vb.setAspectLocked(True, ratio=1.0)
+        
+        # Re-check upsample on resize
+        if hasattr(self, "l_side"):
+            self.set_l_side(self.l_side)
 
     def toggle_arrows(self, show: bool) -> None:
-        """Toggle arrow overlay visibility.
-
-        Args:
-            show: True to show arrows, False to hide.
-        """
         self.show_arrows = show and (self.l_side <= self.ARROW_THRESHOLD)
         if self.show_arrows and self._theta_cache is not None:
             self._render_arrows(self._theta_cache)
         else:
-            # Clear arrow layer
             self.arrows_img.clear()
 
-    def set_arrow_threshold(self, threshold: int) -> None:
-        """Set the lattice size threshold for auto-disabling arrows.
-
-        Args:
-            threshold: Maximum L value for showing arrows.
-        """
-        self.ARROW_THRESHOLD = threshold
-        # Re-evaluate visibility if currently showing
-        if self.show_arrows and self.l_side > threshold:
-            self.toggle_arrows(False)
-
     def _render_arrows(self, theta: np.ndarray) -> None:
-        """Render direction arrows overlay using QPainter.
-
-        Args:
-            theta: Array of rotor angles with shape (n_rotors,).
-        """
         if not self.show_arrows or len(theta) != self.n_rotors:
             self.arrows_img.clear()
             return
@@ -126,112 +107,70 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         l_side = self.l_side
         total_size = l_side * s
 
-        # Create a QImage to draw into. QImage uses row-major (y, x) order.
-        image = QtGui.QImage(
-            total_size,
-            total_size,
-            QtGui.QImage.Format.Format_RGBA8888,
-        )
+        image = QtGui.QImage(total_size, total_size, QtGui.QImage.Format.Format_RGBA8888)
         image.fill(QtCore.Qt.GlobalColor.transparent)
 
         painter = QtGui.QPainter(image)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
-        # White pen for arrows, thickness proportional to upsample (matches OpenGL ~0.015)
         pen = QtGui.QPen(QtGui.QColor(255, 255, 255, 220))
         arrow_thickness = max(1, int(0.015 * s))
         pen.setWidth(arrow_thickness)
         painter.setPen(pen)
 
-        # Center of each disc in pixels
         center_offset = (s - 1) / 2.0
-        # Arrow length (full radius = 0.45 * s)
         arrow_length = 0.45 * s
-
-        # Reshape theta to 2D grid (row-major)
         theta_2d = theta.reshape(l_side, l_side)
 
-        # Draw arrows for each rotor
         for row in range(l_side):
             for col in range(l_side):
                 angle = theta_2d[row, col]
-
-                # Disc center in pixel coordinates
                 center_x = col * s + center_offset
                 center_y = row * s + center_offset
-
                 end_x = center_x + arrow_length * np.sin(angle)
                 end_y = center_y - arrow_length * np.cos(angle)
-
                 painter.drawLine(QtCore.QPointF(center_x, center_y), QtCore.QPointF(end_x, end_y))
 
         painter.end()
-
-        # Convert QImage to numpy array
         ptr = cast(Any, image.bits())
         ptr.setsize(total_size * total_size * 4)
-        # QImage data is row-major: (Y, X, 4)
         arrows_buffer_yx = np.frombuffer(ptr, dtype=np.uint8).reshape(total_size, total_size, 4)
-
-        # Transpose to (X, Y, 4) for pyqtgraph's col-major ImageItem
         arrows_buffer_xy = arrows_buffer_yx.transpose(1, 0, 2).copy()
-
-        # Set the arrow image
         self.arrows_img.setImage(arrows_buffer_xy, autoLevels=False)
 
-        # Apply same transform as disc image
         tr = QtGui.QTransform()
         tr.translate(-0.5, -0.5)
         tr.scale(1.0 / s, 1.0 / s)
         self.arrows_img.setTransform(tr)
 
     def set_l_side(self, l_side: int) -> None:
-        """Update the lattice side length and rebuild the grid/mask.
-
-        Also recalculates the adaptive upsample rate based on new L value.
-        """
-        # Calculate new upsample rate
         new_upsample = self._calculate_upsample(l_side)
-
-        # Check if resolution changed (need to rebuild buffers)
         resolution_changed = new_upsample != self._upsample
         self._upsample = new_upsample
-
         self.l_side = l_side
         self.n_rotors = l_side**2
 
         s = self._upsample
         if s > 1:
-            # Create a single anti-aliased disc mask
-            # We use float distances to get smooth edges
             y, x = np.ogrid[:s, :s]
             center = (s - 1) / 2.0
             dist = np.sqrt((x - center) ** 2 + (y - center) ** 2)
-
             radius = 0.45 * s
-            # Anti-aliasing: smooth transition from 1 to 0 over ~1 pixel
-            # Mask is 255 inside radius, 0 outside, with a 1-pixel ramp
             mask_f = np.clip(radius + 0.5 - dist, 0, 1)
             mask = (mask_f * 255).astype(np.uint8)
-
-            # Tile it to the full lattice size.
             self.alpha_mask = np.tile(mask, (l_side, l_side))
         else:
-            # Point Mode: s=1, no upsampling, solid pixels
             self.alpha_mask = np.full((l_side, l_side), 255, dtype=np.uint8)
 
-        # Pre-allocate RGBA buffer (X, Y, 4)
         total_size = l_side * s
         self.rgba_buffer = np.zeros((total_size, total_size, 4), dtype=np.uint8)
         self.rgba_buffer[..., 3] = self.alpha_mask
         self._rgb_block_view = self.rgba_buffer[..., :3].reshape(l_side, s, l_side, s, 3)
 
-        # Center the image
         if not hasattr(self, "img") or self.img is None:
             return
 
         tr = QtGui.QTransform()
-        # Map the [0, total_size] range of the image to [-0.5, L-0.5]
         tr.translate(-0.5, -0.5)
         tr.scale(1.0 / s, 1.0 / s)
         try:
@@ -239,54 +178,36 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         except RuntimeError:
             pass
 
-        if not hasattr(self, "plot") or self.plot is None:
-            return
-
         padding = 1.5
         x_range = [-padding, l_side - 1 + padding]
         y_range = [-padding, l_side - 1 + padding]
 
         try:
             vb = self.plot.getViewBox()
-            if vb is None:
-                return
-            vb.setAspectLocked(True, ratio=1.0)
-            vb.setRange(xRange=x_range, yRange=y_range, padding=0)
-            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
-            vb.setMouseEnabled(False, False)
+            if vb is not None:
+                vb.setAspectLocked(True, ratio=1.0)
+                vb.setRange(xRange=x_range, yRange=y_range, padding=0)
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
+                vb.setMouseEnabled(False, False)
         except RuntimeError:
             pass
 
-        # Clear arrow cache and image when resolution changes
         if resolution_changed:
             self._theta_cache = None
             self.arrows_img.clear()
 
     def update_rotors(self, theta: np.ndarray, omega: np.ndarray) -> None:
-        """
-        Update the visualization with new rotor angles and velocities.
-        """
         if len(theta) != self.n_rotors:
             return
-
         hues = theta_to_hue(theta)
         vals = omega_to_value(omega**2)
-
-        # Vectorized RGB computation
-        sats = np.ones_like(hues)
-        rgb = hsv_to_rgb_array(hues, sats, vals)
-
-        # Reshape to (Y, X, 3) since theta is row-major
+        rgb = hsv_to_rgb_array(hues, np.ones_like(hues), vals)
         rgb_2d = rgb.reshape(self.l_side, self.l_side, 3)
-
-        # Upsample without allocating large temporaries:
-        # buffer is (X_up, Y_up, 3), so fill [x, y] blocks from rgb_2d[y, x].
         s = self._upsample
         rgb_xy = rgb_2d.transpose(1, 0, 2)
         self._rgb_block_view[:, :, :, :, :] = rgb_xy[:, None, :, None, :]
         self.img.setImage(self.rgba_buffer, autoLevels=False)
 
-        # Cache theta and update arrows only when visible
         if self.show_arrows:
             self._theta_cache = theta.copy()
             self._render_arrows(theta)
@@ -303,6 +224,7 @@ if ogl is not None:
         """
 
         ARROW_THRESHOLD = 60
+        POINT_MODE_PIXEL_THRESHOLD = 4.0
 
         def __init__(self, l_side: int, parent: QtWidgets.QWidget | None = None):
             super().__init__(parent=parent)
@@ -320,21 +242,18 @@ if ogl is not None:
             self._pbos = None
             self._pbo_idx = 0
             self._tex_l_side: int | None = None
-            self._tex_mode: str | None = None # 'physical' or 'visual'
+            self._tex_mode: str | None = None
             self._rgba_pixels: np.ndarray | None = None
             self._using_rgba = False
 
         def get_pbos(self) -> list[int]:
-            """Expose the PBO IDs for external (Taichi) interop."""
             return list(self._pbos) if self._pbos is not None else []
 
         def get_state_tex_id(self) -> int:
-            """Expose the OpenGL texture ID for external (Taichi) interop."""
             return int(self._state_tex) if self._state_tex is not None else 0
 
         def notify_state_updated(self) -> None:
-            """Notify the visualizer that the GPU-resident state has been modified externally."""
-            self._textures_dirty = False  # Skip CPU upload
+            self._textures_dirty = False
             self.update()
 
         def toggle_arrows(self, show: bool) -> None:
@@ -362,7 +281,6 @@ if ogl is not None:
             self.update()
 
         def update_pixels(self, rgba: np.ndarray) -> None:
-            """Update visualization using pre-mapped RGBA pixels."""
             self._using_rgba = True
             self._rgba_pixels = rgba
             self._textures_dirty = True
@@ -424,24 +342,17 @@ if ogl is not None:
                 }
                 
                 vec2 sample_uv = (cell + vec2(0.5)) / u_L;
-                
                 vec3 rgb;
                 float theta_val;
 
                 if (u_use_rgba > 0.5) {
-                    // Direct RGBA mode
                     vec4 sample = texture2D(u_state, sample_uv);
                     rgb = sample.rgb;
-                    // For arrows in RGBA mode, we'd need theta. 
-                    // For now, arrows are disabled or fetch dummy theta.
                     theta_val = 0.0; 
                 } else {
-                    // Physical state mode (RG32F)
                     vec2 state = texture2D(u_state, sample_uv).rg;
                     theta_val = state.r;
                     float omega_val = state.g;
-
-                    // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
                     float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
                     float energy = omega_val * omega_val;
                     float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
@@ -470,43 +381,12 @@ if ogl is not None:
             program.link()
             self._program = program
 
-            # Full-screen quad (two triangles)
-            verts = np.array(
-                [
-                    -1.0,
-                    -1.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    -1.0,
-                    1.0,
-                    0.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    -1.0,
-                    -1.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    -1.0,
-                    1.0,
-                    0.0,
-                    1.0,
-                ],
-                dtype=np.float32,
-            )
-
+            verts = np.array([-1.0, -1.0, 0.0, 0.0, 1.0, -1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 
+                              -1.0, -1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 0.0, 1.0], dtype=np.float32)
             self._vbo = ogl.glGenBuffers(1)
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, self._vbo)
             ogl.glBufferData(ogl.GL_ARRAY_BUFFER, verts.nbytes, verts, ogl.GL_STATIC_DRAW)
-
-            stride = 4 * 4
-            self._vbo_stride = stride
+            self._vbo_stride = 16
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, 0)
 
             self._state_tex = ogl.glGenTextures(1)
@@ -516,12 +396,10 @@ if ogl is not None:
         def _init_textures(self) -> None:
             if self._state_tex is None:
                 return
-            
             internal_format = ogl.GL_RG32F
             gl_format = ogl.GL_RG
             gl_type = ogl.GL_FLOAT
             mode = 'physical'
-            
             if self._using_rgba:
                 internal_format = ogl.GL_RGBA8
                 gl_format = ogl.GL_RGBA
@@ -533,27 +411,13 @@ if ogl is not None:
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_MAG_FILTER, ogl.GL_NEAREST)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_S, ogl.GL_CLAMP_TO_EDGE)
             ogl.glTexParameteri(ogl.GL_TEXTURE_2D, ogl.GL_TEXTURE_WRAP_T, ogl.GL_CLAMP_TO_EDGE)
-            
-            ogl.glTexImage2D(
-                ogl.GL_TEXTURE_2D,
-                0,
-                internal_format,
-                self.l_side,
-                self.l_side,
-                0,
-                gl_format,
-                gl_type,
-                None,
-            )
+            ogl.glTexImage2D(ogl.GL_TEXTURE_2D, 0, internal_format, self.l_side, self.l_side, 0, gl_format, gl_type, None)
 
-            # Pre-allocate PBO buffers (using largest possible size)
-            # Physical: 8 bytes/pixel, Visual: 4 bytes/pixel. We use 8.
             data_size = self.l_side * self.l_side * 8
             for pbo in self._pbos:
                 ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
                 ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_size, None, ogl.GL_STREAM_DRAW)
             ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, 0)
-
             ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._textures_dirty = True
@@ -562,58 +426,32 @@ if ogl is not None:
 
         def resizeGL(self, w: int, h: int) -> None:  # noqa: N802
             dpr = self.devicePixelRatioF()
-            w_px = int(w * dpr)
-            h_px = int(h * dpr)
+            w_px, h_px = int(w * dpr), int(h * dpr)
             size = min(w_px, h_px)
-            x = (w_px - size) // 2
-            y = (h_px - size) // 2
-            ogl.glViewport(x, y, size, size)
+            ogl.glViewport((w_px - size) // 2, (h_px - size) // 2, size, size)
 
         def _upload_textures(self) -> None:
             if self._state_tex is None or self._pbos is None:
                 return
-
             data_to_upload = None
-            gl_format = ogl.GL_RG
-            gl_type = ogl.GL_FLOAT
-            
+            gl_format, gl_type = ogl.GL_RG, ogl.GL_FLOAT
             if self._using_rgba and self._rgba_pixels is not None:
                 data_to_upload = np.ascontiguousarray(self._rgba_pixels, dtype=np.uint8)
-                gl_format = ogl.GL_RGBA
-                gl_type = ogl.GL_UNSIGNED_BYTE
+                gl_format, gl_type = ogl.GL_RGBA, ogl.GL_UNSIGNED_BYTE
             else:
-                # Pack theta (R) and omega (G) into a single dual-channel float32 array
                 state_2d = np.empty((self.l_side, self.l_side, 2), dtype=np.float32)
                 state_2d[..., 0] = self._theta.reshape(self.l_side, self.l_side)
                 state_2d[..., 1] = self._omega.reshape(self.l_side, self.l_side)
                 data_to_upload = np.ascontiguousarray(state_2d)
 
-            # Use PBO for asynchronous upload
             pbo = self._pbos[self._pbo_idx]
             self._pbo_idx = (self._pbo_idx + 1) % 2
-
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
             ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, pbo)
-            
-            # Orphan buffer for performance
             ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_to_upload.nbytes, None, ogl.GL_STREAM_DRAW)
-            # Upload data to PBO
             ogl.glBufferData(ogl.GL_PIXEL_UNPACK_BUFFER, data_to_upload.nbytes, data_to_upload, ogl.GL_STREAM_DRAW)
-            
-            # Trigger asynchronous transfer from PBO to texture
             ogl.glPixelStorei(ogl.GL_UNPACK_ALIGNMENT, 1)
-            ogl.glTexSubImage2D(
-                ogl.GL_TEXTURE_2D,
-                0,
-                0,
-                0,
-                self.l_side,
-                self.l_side,
-                gl_format,
-                gl_type,
-                c_void_p(0),
-            )
-            
+            ogl.glTexSubImage2D(ogl.GL_TEXTURE_2D, 0, 0, 0, self.l_side, self.l_side, gl_format, gl_type, c_void_p(0))
             ogl.glBindBuffer(ogl.GL_PIXEL_UNPACK_BUFFER, 0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._textures_dirty = False
@@ -621,25 +459,22 @@ if ogl is not None:
         def paintGL(self) -> None:  # noqa: N802
             if self._program is None or self._vbo is None:
                 return
-            # Ensure square viewport even if resizeGL wasn't called (HiDPI / initial draw).
             dpr = self.devicePixelRatioF()
-            w_px = int(self.width() * dpr)
-            h_px = int(self.height() * dpr)
+            w_px, h_px = int(self.width() * dpr), int(self.height() * dpr)
             size = min(w_px, h_px)
-            x = (w_px - size) // 2
-            y = (h_px - size) // 2
-            ogl.glViewport(x, y, size, size)
+            ogl.glViewport((w_px - size) // 2, (h_px - size) // 2, size, size)
+            
+            pixel_per_rotor = size / (self.l_side * dpr)
+            solid_mode = pixel_per_rotor < self.POINT_MODE_PIXEL_THRESHOLD
             
             current_mode = 'visual' if self._using_rgba else 'physical'
             if self._tex_l_side != self.l_side or self._tex_mode != current_mode:
                 self._init_textures()
-            
             if self._textures_dirty:
                 self._upload_textures()
 
             ogl.glClearColor(0.0, 0.0, 0.0, 1.0)
             ogl.glClear(ogl.GL_COLOR_BUFFER_BIT)
-
             self._program.bind()
             self._program.setUniformValue("u_L", float(self.l_side))
             self._program.setUniformValue("u_radius", 0.45)
@@ -651,14 +486,12 @@ if ogl is not None:
             self._program.setUniformValue("u_arrow_len", 0.45)
             self._program.setUniformValue("u_arrow_thickness", 0.015)
             self._program.setUniformValue("u_use_rgba", 1.0 if self._using_rgba else 0.0)
-            self._program.setUniformValue("u_solid_mode", 1.0 if self.l_side >= 640 else 0.0)
+            self._program.setUniformValue("u_solid_mode", 1.0 if solid_mode else 0.0)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
             self._program.setUniformValue("u_state", 0)
-
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, self._vbo)
-
             ogl.glEnableVertexAttribArray(0)
             ogl.glVertexAttribPointer(0, 2, ogl.GL_FLOAT, False, self._vbo_stride, c_void_p(0))
             ogl.glEnableVertexAttribArray(1)
@@ -667,6 +500,5 @@ if ogl is not None:
             ogl.glDisableVertexAttribArray(0)
             ogl.glDisableVertexAttribArray(1)
             ogl.glBindBuffer(ogl.GL_ARRAY_BUFFER, 0)
-
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, 0)
             self._program.release()
