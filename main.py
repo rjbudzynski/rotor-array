@@ -274,6 +274,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if enabled and not NUMBA_AVAILABLE:
             self.controls.set_numba_checked(False)
             return
+        self.timer.stop() # Stop GUI updates during switch
         self.use_numba = enabled
         if enabled:
             self.use_taichi = False
@@ -284,6 +285,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if enabled and not TAICHI_AVAILABLE:
             self.controls.set_taichi_checked(False)
             return
+        self.timer.stop() # Stop GUI updates during switch
         self.use_taichi = enabled
         if enabled:
             self.use_numba = False
@@ -306,6 +308,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controls.set_opengl_checked(False)
             return
         
+        was_running = self.worker.is_running
+        if was_running:
+            self.toggle_simulation(False)
+        else:
+            self.timer.stop() # Ensure GUI timer is also stopped
+
         self.use_opengl = enabled
         self._replace_visualizer()
         
@@ -315,6 +323,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Sync arrow state after visualizer switch
         self.toggle_arrows(self.controls.arrows_checkbox.isChecked())
+        
+        if was_running:
+            self.toggle_simulation(True)
+        else:
+            # Refresh static frame
+            self.update_gui()
 
     def toggle_simulation(self, started: bool):
         self.controls.set_simulation_running(started)
