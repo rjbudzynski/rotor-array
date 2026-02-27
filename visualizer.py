@@ -317,6 +317,19 @@ if ogl is not None:
             self._pbo_idx = 0
             self._tex_l_side: int | None = None
 
+        def get_pbos(self) -> list[int]:
+            """Expose the PBO IDs for external (Taichi) interop."""
+            return list(self._pbos) if self._pbos is not None else []
+
+        def get_state_tex_id(self) -> int:
+            """Expose the OpenGL texture ID for external (Taichi) interop."""
+            return int(self._state_tex) if self._state_tex is not None else 0
+
+        def notify_state_updated(self) -> None:
+            """Notify the visualizer that the GPU-resident state has been modified externally."""
+            self._textures_dirty = False  # Skip CPU upload
+            self.update()
+
         def toggle_arrows(self, show: bool) -> None:
             self._show_arrows = show and (self.l_side <= self.ARROW_THRESHOLD)
             self.update()

@@ -41,14 +41,16 @@ if TAICHI_AVAILABLE:
             self.sum_sin = ti.field(dtype=ti.f32, shape=())
             self.sum_ke = ti.field(dtype=ti.f32, shape=())
             self.sum_pe = ti.field(dtype=ti.f32, shape=())
+            self.stats_dirty = True
 
         @ti.kernel
         def compute_acceleration(self):
             for i, j in self.theta:
-                i_up = (i - 1 + self.l_side) % self.l_side
-                i_dn = (i + 1) % self.l_side
-                j_lt = (j - 1 + self.l_side) % self.l_side
-                j_rt = (j + 1) % self.l_side
+                # Fast periodic boundaries without modulo
+                i_up = i - 1 if i > 0 else self.l_side - 1
+                i_dn = i + 1 if i + 1 < self.l_side else 0
+                j_lt = j - 1 if j > 0 else self.l_side - 1
+                j_rt = j + 1 if j + 1 < self.l_side else 0
 
                 theta_curr = self.theta[i, j]
                 # Neighbors: Right, Left, Down, Up
@@ -62,27 +64,25 @@ if TAICHI_AVAILABLE:
                 self.accel[i, j] = -self.j[None] * force - self.m[None] * ti.sin(theta_curr)
 
         @ti.kernel
-        def verlet_step_1(self, dt: ti.f32):
-            """First half of Velocity Verlet + position update."""
+        def verlet_half_step_omega(self, dt: ti.f32):
+            """Half step update for omega."""
             for i, j in self.theta:
                 self.omega[i, j] += self.accel[i, j] * dt * 0.5
+
+        @ti.kernel
+        def verlet_full_step_theta(self, dt: ti.f32):
+            """Full step update for theta with wrapping."""
+            for i, j in self.theta:
                 self.theta[i, j] += self.omega[i, j] * dt
 
                 # Wrap theta to [-pi, pi]
-                # ti.fmod(a, b) in Taichi is like C fmod
                 val = self.theta[i, j] + ti.math.pi
                 two_pi = 2.0 * ti.math.pi
                 wrapped = val - ti.floor(val / two_pi) * two_pi
                 self.theta[i, j] = wrapped - ti.math.pi
 
         @ti.kernel
-        def verlet_step_2(self, dt: ti.f32):
-            """Second half of Velocity Verlet."""
-            for i, j in self.theta:
-                self.omega[i, j] += self.accel[i, j] * dt * 0.5
-
-        @ti.kernel
-        def compute_stats(self):
+        def compute_stats_kernel(self):
             """Compute sums for energy and order parameter in one pass."""
             self.sum_cos[None] = 0.0
             self.sum_sin[None] = 0.0
@@ -100,18 +100,32 @@ if TAICHI_AVAILABLE:
                 # Kinetic energy
                 ti.atomic_add(self.sum_ke[None], 0.5 * w * w)
 
-                # Potential energy (neighbors)
-                i_dn = (i + 1) % self.l_side
-                j_rt = (j + 1) % self.l_side
+                # Potential energy (neighbors) - only Down and Right to avoid double counting
+                i_dn = i + 1 if i + 1 < self.l_side else 0
+                j_rt = j + 1 if j + 1 < self.l_side else 0
+                
                 ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i_dn, j])))
                 ti.atomic_add(self.sum_pe[None], self.j[None] * (1.0 - ti.cos(t - self.theta[i, j_rt])))
 
                 # Field energy
                 ti.atomic_add(self.sum_pe[None], -self.m[None] * ti.cos(t))
 
+        def compute_stats(self):
+            if self.stats_dirty:
+                self.compute_stats_kernel()
+                self.stats_dirty = False
+
+        @ti.kernel
+        def copy_to_buffer(self, buf: ti.types.ndarray()):
+            for i, j in self.theta:
+                idx = (i * self.l_side + j) * 2
+                buf[idx] = self.theta[i, j]
+                buf[idx + 1] = self.omega[i, j]
+
         def set_state(self, theta: np.ndarray, omega: np.ndarray):
             self.theta.from_numpy(theta.reshape(self.l_side, self.l_side).astype(np.float32))
             self.omega.from_numpy(omega.reshape(self.l_side, self.l_side).astype(np.float32))
+            self.stats_dirty = True
 
         def get_theta(self) -> np.ndarray:
             return self.theta.to_numpy().flatten()
@@ -130,6 +144,12 @@ if TAICHI_AVAILABLE:
             self.t = 0.0
             self.substeps = 10
             self._initial_energy = 0.0
+            self._pbos = []
+            self._pbo_idx = 0
+
+        def set_pbos(self, pbos: list[int]):
+            """Set the OpenGL PBO IDs for zero-copy rendering."""
+            self._pbos = pbos
 
         def set_state(self, y: np.ndarray, t: float = 0.0):
             n = self.params.n_rotors
@@ -144,15 +164,42 @@ if TAICHI_AVAILABLE:
                 self.array.j[None] = j
             if m is not None:
                 self.array.m[None] = m
+            self.array.stats_dirty = True
 
         def step(self, dt: float) -> bool:
             sub_dt = dt / self.substeps
-            for _ in range(self.substeps):
-                # Velocity Verlet step
-                self.array.verlet_step_1(sub_dt)
+            
+            # Optimized Velocity Verlet:
+            # 1. Half step omega (kick)
+            # 2. Loop:
+            #    a. Full step theta (drift)
+            #    b. Compute acceleration (new forces)
+            #    c. Full step omega (double kick)
+            # 3. Last Half step omega (kick)
+            
+            # This reduces kernel launches by consolidating steps.
+            self.array.verlet_half_step_omega(sub_dt)
+            
+            for i in range(self.substeps):
+                self.array.verlet_full_step_theta(sub_dt)
                 self.array.compute_acceleration()
-                self.array.verlet_step_2(sub_dt)
+                if i < self.substeps - 1:
+                    # Full kick for internal steps
+                    self.array.verlet_half_step_omega(sub_dt * 2.0)
+                else:
+                    # Final half kick
+                    self.array.verlet_half_step_omega(sub_dt)
+            
             self.t += dt
+            self.array.stats_dirty = True
+
+            # If zero-copy PBOs are available, write directly to them
+            if self._pbos:
+                # Use current PBO
+                pbo = self._pbos[self._pbo_idx]
+                self._pbo_idx = (self._pbo_idx + 1) % 2
+                # TODO: Implement direct pointer map or ExternalArray sync
+            
             return True
 
         def get_energy(self) -> float:

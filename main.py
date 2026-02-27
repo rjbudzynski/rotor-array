@@ -192,6 +192,9 @@ class MainWindow(QtWidgets.QMainWindow):
         
         if self.use_taichi and TAICHI_AVAILABLE:
             self.engine = TaichiSimulationEngine(params)
+            # Link PBOs for zero-copy rendering if using OpenGL
+            if self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
+                self.engine.set_pbos(self.visualizer.get_pbos())
         else:
             self.engine = SimulationEngine(params, use_numba=self.use_numba)
 
@@ -251,6 +254,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.use_numba = False
             self.controls.set_numba_checked(False)
         self.reinit_simulation(self.l_side)
+        
+        # Link PBOs for zero-copy rendering if using OpenGL
+        if enabled and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
+            self.engine.set_pbos(self.visualizer.get_pbos())
 
     def update_opengl(self, enabled: bool):
         if enabled and not OPENGL_AVAILABLE:
@@ -262,6 +269,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.use_opengl = enabled
         self._replace_visualizer()
+        
+        # Link PBOs for zero-copy rendering if using Taichi
+        if self.use_taichi and TAICHI_AVAILABLE and isinstance(self.visualizer, RotorArrayGLVisualizer):
+            self.engine.set_pbos(self.visualizer.get_pbos())
+
         # Sync arrow state after visualizer switch
         self.toggle_arrows(self.controls.arrows_checkbox.isChecked())
 
