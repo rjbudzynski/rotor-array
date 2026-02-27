@@ -25,18 +25,18 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     """
 
     ARROW_THRESHOLD = 60  # Auto-disable arrows when L > this value
-    MIN_UPSAMPLE = 4  # Minimum pixels per disc (for large L)
+    MIN_UPSAMPLE = 1  # 1 pixel per disc (Point Mode) for massive L
     MAX_UPSAMPLE = 64  # Maximum pixels per disc (for small L)
 
     @staticmethod
     def _calculate_upsample(l_side: int) -> int:
         """Calculate adaptive upsample rate based on lattice size.
 
-        Formula: max(4, min(64, int(640 / L)))
+        Formula: max(1, min(64, int(640 / L)))
         - L=10: 64 pixels/disc (crisp large discs)
         - L=20: 32 pixels/disc
-        - L=160: 4 pixels/disc
-        - L>=160: 4 pixels/disc (minimum floor)
+        - L=40: 16 pixels/disc
+        - L>=640: 1 pixel/disc (Point Mode)
 
         Args:
             l_side: Lattice side length (number of rotors per side).
@@ -45,7 +45,7 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
             Upsample rate: pixels per disc in each dimension.
         """
         if l_side <= 0:
-            return RotorArrayVisualizer.MIN_UPSAMPLE
+            return 64
         return max(
             RotorArrayVisualizer.MIN_UPSAMPLE,
             min(RotorArrayVisualizer.MAX_UPSAMPLE, int(640 / l_side)),
@@ -201,20 +201,24 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
         self.n_rotors = l_side**2
 
         s = self._upsample
-        # Create a single anti-aliased disc mask
-        # We use float distances to get smooth edges
-        y, x = np.ogrid[:s, :s]
-        center = (s - 1) / 2.0
-        dist = np.sqrt((x - center) ** 2 + (y - center) ** 2)
+        if s > 1:
+            # Create a single anti-aliased disc mask
+            # We use float distances to get smooth edges
+            y, x = np.ogrid[:s, :s]
+            center = (s - 1) / 2.0
+            dist = np.sqrt((x - center) ** 2 + (y - center) ** 2)
 
-        radius = 0.45 * s
-        # Anti-aliasing: smooth transition from 1 to 0 over ~1 pixel
-        # Mask is 255 inside radius, 0 outside, with a 1-pixel ramp
-        mask_f = np.clip(radius + 0.5 - dist, 0, 1)
-        mask = (mask_f * 255).astype(np.uint8)
+            radius = 0.45 * s
+            # Anti-aliasing: smooth transition from 1 to 0 over ~1 pixel
+            # Mask is 255 inside radius, 0 outside, with a 1-pixel ramp
+            mask_f = np.clip(radius + 0.5 - dist, 0, 1)
+            mask = (mask_f * 255).astype(np.uint8)
 
-        # Tile it to the full lattice size.
-        self.alpha_mask = np.tile(mask, (l_side, l_side))
+            # Tile it to the full lattice size.
+            self.alpha_mask = np.tile(mask, (l_side, l_side))
+        else:
+            # Point Mode: s=1, no upsampling, solid pixels
+            self.alpha_mask = np.full((l_side, l_side), 255, dtype=np.uint8)
 
         # Pre-allocate RGBA buffer (X, Y, 4)
         total_size = l_side * s
@@ -392,6 +396,7 @@ if ogl is not None:
             uniform float u_arrow_len;
             uniform float u_arrow_thickness;
             uniform float u_use_rgba;
+            uniform float u_solid_mode;
 
             vec3 hsv2rgb(vec3 c) {
                 vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
@@ -409,10 +414,15 @@ if ogl is not None:
                 vec2 cell = floor(grid);
                 vec2 local = fract(grid) - vec2(0.5);
                 float dist = length(local);
-                float alpha = 1.0 - smoothstep(u_radius - u_edge, u_radius, dist);
-                if (alpha <= 0.0) {
-                    discard;
+                
+                float alpha = 1.0;
+                if (u_solid_mode < 0.5) {
+                    alpha = 1.0 - smoothstep(u_radius - u_edge, u_radius, dist);
+                    if (alpha <= 0.0) {
+                        discard;
+                    }
                 }
+                
                 vec2 sample_uv = (cell + vec2(0.5)) / u_L;
                 
                 vec3 rgb;
@@ -641,6 +651,7 @@ if ogl is not None:
             self._program.setUniformValue("u_arrow_len", 0.45)
             self._program.setUniformValue("u_arrow_thickness", 0.015)
             self._program.setUniformValue("u_use_rgba", 1.0 if self._using_rgba else 0.0)
+            self._program.setUniformValue("u_solid_mode", 1.0 if self.l_side >= 640 else 0.0)
 
             ogl.glActiveTexture(ogl.GL_TEXTURE0)
             ogl.glBindTexture(ogl.GL_TEXTURE_2D, self._state_tex)
