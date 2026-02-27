@@ -12,14 +12,15 @@ def theta_to_hue(theta: np.ndarray) -> np.ndarray:
     return ((theta + 4 * np.pi / 3) % (2 * np.pi)) / (2 * np.pi)
 
 
-def omega_to_value(omega_sq: np.ndarray, val_min: float = 0.15, val_max: float = 1.0) -> np.ndarray:
+def omega_to_value(omega_sq: np.ndarray, val_min: float = 0.4, val_max: float = 0.8) -> np.ndarray:
     """
     Map kinetic energy (omega^2) to brightness values in [val_min, val_max].
 
     Uses a hyperbolic tangent to softly saturate high energy values.
+    Matches web subproject defaults.
     """
     # Use tanh to map energy to [0, 1] softly
-    energy_factor = np.tanh(omega_sq / 2.0)
+    energy_factor = np.tanh(omega_sq / 5.0)
     return val_min + (val_max - val_min) * energy_factor
 
 

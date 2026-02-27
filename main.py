@@ -142,7 +142,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initial_energy = self.engine.get_energy()
         
         if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
-            pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+            pixels = self.engine.get_rgba_pixels(0.4, 0.8)
             self.visualizer.update_pixels(pixels)
         else:
             self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
@@ -362,7 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_info_update_t = self.engine.t
         
         if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
-            pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+            pixels = self.engine.get_rgba_pixels(0.4, 0.8)
             self.visualizer.update_pixels(pixels)
         else:
             self.visualizer.update_rotors(self.engine.theta, self.engine.omega)
@@ -400,8 +400,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.use_taichi and self.use_opengl and isinstance(self.visualizer, RotorArrayGLVisualizer):
                 # We still need a snapshot for 't', but we can fetch pixels directly
                 snapshot = self.worker.get_snapshot(full=need_full)
-                # Fetch RGBA pixels safely via worker
-                pixels = self.worker.get_pixels(0.15, 1.0)
+                # Fetch RGBA pixels safely via worker (aligned with web version)
+                pixels = self.worker.get_pixels(0.4, 0.8)
                 if pixels is not None:
                     self.visualizer.update_pixels(pixels)
             else:

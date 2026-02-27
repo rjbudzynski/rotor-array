@@ -127,7 +127,7 @@ class PhysicsWorker(QtCore.QObject):
                     
                     # Update async pixel buffer if supported (Taichi path)
                     if hasattr(self.engine, 'get_rgba_pixels'):
-                        new_pixels = self.engine.get_rgba_pixels(0.15, 1.0)
+                        new_pixels = self.engine.get_rgba_pixels(0.4, 0.8)
                         with self._pixel_lock:
                             self._front_buffer = new_pixels
 

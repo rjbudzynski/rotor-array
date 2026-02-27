@@ -25,18 +25,18 @@ class RotorArrayVisualizer(pg.GraphicsLayoutWidget):
     """
 
     ARROW_THRESHOLD = 60  # Auto-disable arrows when L > this value
-    MIN_UPSAMPLE = 16  # Minimum pixels per disc (for large L)
+    MIN_UPSAMPLE = 4  # Minimum pixels per disc (for large L)
     MAX_UPSAMPLE = 64  # Maximum pixels per disc (for small L)
 
     @staticmethod
     def _calculate_upsample(l_side: int) -> int:
         """Calculate adaptive upsample rate based on lattice size.
 
-        Formula: max(16, min(64, int(640 / L)))
+        Formula: max(4, min(64, int(640 / L)))
         - L=10: 64 pixels/disc (crisp large discs)
         - L=20: 32 pixels/disc
-        - L=40: 16 pixels/disc (current standard)
-        - L>=64: 16 pixels/disc (minimum floor)
+        - L=160: 4 pixels/disc
+        - L>=160: 4 pixels/disc (minimum floor)
 
         Args:
             l_side: Lattice side length (number of rotors per side).
@@ -434,7 +434,7 @@ if ogl is not None:
                     // Rotate by +4pi/3 so theta=0 (field direction) -> hue=2/3 (blue)
                     float hue = mod(theta_val + 4.1887902048, 6.28318530718) / 6.28318530718;
                     float energy = omega_val * omega_val;
-                    float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 2.0);
+                    float value = u_val_min + (u_val_max - u_val_min) * tanh_approx(energy / 5.0);
                     rgb = hsv2rgb(vec3(hue, 1.0, value));
                 }
                 
@@ -634,8 +634,8 @@ if ogl is not None:
             self._program.setUniformValue("u_L", float(self.l_side))
             self._program.setUniformValue("u_radius", 0.45)
             self._program.setUniformValue("u_edge", 0.05)
-            self._program.setUniformValue("u_val_min", 0.15)
-            self._program.setUniformValue("u_val_max", 1.0)
+            self._program.setUniformValue("u_val_min", 0.4)
+            self._program.setUniformValue("u_val_max", 0.8)
             self._program.setUniformValue("u_omega_max", 8.0)
             self._program.setUniformValue("u_show_arrows", 1.0 if self._show_arrows else 0.0)
             self._program.setUniformValue("u_arrow_len", 0.45)

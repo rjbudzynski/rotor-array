@@ -102,7 +102,7 @@ if TAICHI_AVAILABLE:
                 
                 # 2. Value mapping
                 energy = w * w
-                energy_factor = ti.tanh(energy / 2.0)
+                energy_factor = ti.tanh(energy / 5.0)
                 value = val_min + (val_max - val_min) * energy_factor
                 
                 # 3. HSV to RGB
